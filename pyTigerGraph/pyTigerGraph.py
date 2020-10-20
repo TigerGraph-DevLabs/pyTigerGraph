@@ -55,7 +55,8 @@ class TigerGraphConnection(object):
         - `certPath`:          The location/directory _and_ the name of the SSL certification file where the certification should be stored.
         """
 
-        self.host = host
+        self.tgLocation = urllib.parse.urlparse(host)
+        self.host = self.tgLocation.scheme + "://" + self.tgLocation.netloc
         self.username = username
         self.password = password
         self.graphname = graphname
@@ -71,14 +72,14 @@ class TigerGraphConnection(object):
 
         # GSQL client related variables
         self.gsqlInitiated = False
-        self.useCert = useCert
+        self.useCert = useCert  # TODO: if self.tgLocation.scheme == 'https', should we throw exception here or let it be thrown later when gsql is called?
         self.certPath = certPath
         self.gsqlVersion = gsqlVersion
         # Below variables are set during GSQL init
-        self.certLocation = ""
+        self.certLocation = ""  # TODO: is it not the same as self.certPath?
         self.jarLocation = ""
         self.jarName = ""
-        self.url = ""
+        self.url = self.tgLocation.netloc + ":" + self.gsPort
 
     # Private functions ========================================================
 
@@ -1968,9 +1969,6 @@ class TigerGraphConnection(object):
             print("JAR location: " + self.jarLocation)
             print("SSL certificate: " + self.certLocation)
 
-        # Getting TigerGraph URL with GSQL port w/o http[s]://
-        self.url = self.gsUrl.replace("https://", "").replace("http://", "")
-
         # Check if Java runtime is installed.
         if not shutil.which("java"):
             raise TigerGraphException("Could not find Java runtime. Please download and install from https://www.oracle.com/java/technologies/javase-downloads.html", None)
@@ -2003,7 +2001,7 @@ class TigerGraphConnection(object):
                 res.raise_for_status()
             open(self.jarName, 'wb').write(res.content)
 
-        if self.useCert:  # HTTP/HTTPS
+        if self.useCert and not os.path.exists(self.certLocation):  # HTTP/HTTPS
             if self.debug:
                 print("Downloading SSL certificate")
             # TODO: Windows support
@@ -2047,14 +2045,26 @@ class TigerGraphConnection(object):
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE)
 
-        self.stdout = comp.stdout.decode()
-        self.stderr = comp.stderr.decode()
+        stdout = comp.stdout.decode()
+        stderr = comp.stderr.decode()  # TODO: this should be parsed or handled some way, not ignored
+        if self.debug:
+            print("-- stdout " + "-" * 70)
+            print(stdout)
+            print("-- stderr " + "-" * 70)
+            print(stderr)
+            print("-" * 80)
+
+        if "Connection refused." in stdout:
+            if self.tgLocation.scheme == "https" and not self.useCert:
+                raise TigerGraphException("Connection to " + self.url + " was refused. Certificate was not used.", None)
+            else:
+                raise TigerGraphException("Connection to " + self.url + " was refused.", None)
 
         try:
-            json_string = re.search('(\{|\[).*$', self.stdout.replace('\n', ''))[0]
+            json_string = re.search('(\{|\[).*$', stdout.replace('\n', ''))[0]
             json_object = json.loads(json_string)
         except:
-            return self.stdout
+            return stdout
         else:
             return json_object
 
