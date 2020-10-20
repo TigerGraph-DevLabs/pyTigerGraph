@@ -178,7 +178,7 @@ class TigerGraphConnection(object):
     # Schema related functions =================================================
 
     def _getUDTs(self):
-        """Retrieves all User Defined Types (UDTs) of the graph.
+        """Collects User Defined Types (UDTs) metadata.
 
         Endpoint:      GET /gsqlserver/gsql/udtlist
         Documentation: Not documented publicly
@@ -192,6 +192,7 @@ class TigerGraphConnection(object):
         self.schema["UDTs"] = res
 
     def _getSchemaLs(self):
+        """Collects metadata for various schema object types from the output of the `ls` gsql command."""
 
         res = self.gsql('ls')
 
@@ -316,7 +317,7 @@ class TigerGraphConnection(object):
     # TODO: GET /gsqlserver/gsql/queryinfo
     #       https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-gsqlserver-gsql-queryinfo-get-query-metadata 
     def _getQueries(self):
-        """ Get query metadata from REST++ endpoint.
+        """Collects query metadata from REST++ endpoint.
 
         It will not return data for queries that are not (yet) installed.
         """
@@ -343,6 +344,7 @@ class TigerGraphConnection(object):
             query["Method"] = ep.split(" ")[0]
 
     def _getUsers(self):
+        """Collects user metedata."""
         us = []
         res = self.gsql("SHOW USER")
         res = res.split("\n")
@@ -373,6 +375,7 @@ class TigerGraphConnection(object):
         self.schema["Users"] = us
 
     def _getGroups(self):
+        """Collects proxy group metadata."""
         gs = []
         res = self.gsql("SHOW GROUP")
         res = res.split("\n")
@@ -399,7 +402,7 @@ class TigerGraphConnection(object):
         self.schema["Groups"] = gs
 
     def getSchema(self, full=True, force=False):
-        """Retrieves the schema (all vertex and edge type and - if not disabled - the User Defined Type details) of the graph.
+        """Retrieves the schema of the graph.
 
         Arguments:
         - `full`:  If `True`, metadata for all kinds of graph objects are retrieved, not just for vertices and edges.
@@ -424,14 +427,18 @@ class TigerGraphConnection(object):
 
     def getUDTs(self):
         """Returns the list of User Defined Types (names only)."""
+        if "UDTs" not in self.schema:
+            self.getSchema()
         ret = []
-        for udt in self._getUDTs():
+        for udt in self.schema["UDTs"]:
             ret.append(udt["name"])
         return ret
 
     def getUDT(self, udtName):
         """Returns the details of a specific User Defined Type."""
-        for udt in self._getUDTs():
+        if "UDTs" not in self.schema:
+            self.getSchema()
+        for udt in self.schema["UDTs"]:
             if udt["name"] == udtName:
                 return udt["fields"]
         return []  # UDT was not found
@@ -1459,7 +1466,7 @@ class TigerGraphConnection(object):
         """
 
         def parseVertices(vertices):
-            """Parses vertex input parameters and converts it to the format required by the path finding endpoints"""
+            """Parses vertex input parameters and converts it to the format required by the path finding endpoints."""
             ret = []
             if not isinstance(vertices, list):
                 vertices = [vertices]
@@ -1472,11 +1479,10 @@ class TigerGraphConnection(object):
                     ret.append(tmp)
                 elif self.debug:
                     print("Invalid vertex type or value: " + str(v))
-            print(ret)
             return ret
 
         def parseFilters(filters):
-            """Parses filter input parameters and converts it to the format required by the path finding endpoints"""
+            """Parses filter input parameters and converts it to the format required by the path finding endpoints."""
             ret = []
             if not isinstance(filters, list):
                 filters = [filters]
@@ -1489,15 +1495,12 @@ class TigerGraphConnection(object):
                     ret.append(tmp)
                 elif self.debug:
                     print("Invalid filter type or value: " + str(f))
-            print(ret)
             return ret
 
         # Assembling the input payload
         if not sourceVertices or not targetVertices:
             return None  # Should allow TigerGraph to return error instead of handling missing parameters here?
-        data = {}
-        data["sources"] = parseVertices(sourceVertices)
-        data["targets"] = parseVertices(targetVertices)
+        data = {"sources": parseVertices(sourceVertices), "targets": parseVertices(targetVertices)}
         if vertexFilters:
             data["vertexFilters"] = parseFilters(vertexFilters)
         if edgeFilters:
