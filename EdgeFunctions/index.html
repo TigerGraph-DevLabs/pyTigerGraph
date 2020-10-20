@@ -9,7 +9,7 @@
       
       
       <link rel="shortcut icon" href="../pyTigerGraphLogo-removebg-preview.png">
-      <meta name="generator" content="mkdocs-1.1.2, mkdocs-material-6.0.2">
+      <meta name="generator" content="mkdocs-1.1.2, mkdocs-material-6.1.0">
     
     
       
@@ -17,10 +17,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.38780c08.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.bc7e593a.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.3f72e892.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab28b872.min.css">
         
       
     
@@ -67,7 +67,9 @@
       
     </div>
     
-      <header class="md-header" data-md-component="header">
+      
+
+<header class="md-header" data-md-component="header">
   <nav class="md-header-nav md-grid" aria-label="Header">
     <a href=".." title="pyTigerGraph" class="md-header-nav__button md-logo" aria-label="pyTigerGraph">
       
@@ -151,7 +153,9 @@
               <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
-                    <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+                    
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
     <a href=".." title="pyTigerGraph" class="md-nav__button md-logo" aria-label="pyTigerGraph">
       
@@ -629,13 +633,11 @@ See documentation of <code>getEdgeCountFrom</code> above for more details.</p>
 - If edge is not yet present in graph, it will be created (see special case below).
 - If it's already in the graph, it is updated with the values specified in the request. An optional <a href="https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#post-graph-graph_name-upsert-the-given-data">operator</a> controls how the attributes are updated.</p>
 <p>The <code>attributes</code> argument is expected to be a dictionary in this format:</p>
-<pre><code class="python">{&lt;attribute_name&gt;, &lt;attribute_value&gt;|(&lt;attribute_name&gt;, &lt;operator&gt;), …}
+<pre><code class="language-python">{&lt;attribute_name&gt;, &lt;attribute_value&gt;|(&lt;attribute_name&gt;, &lt;operator&gt;), …}
 </code></pre>
-
 <p>Example:</p>
-<pre><code class="python">{&quot;visits&quot;: (1482, &quot;+&quot;), &quot;max_duration&quot;: (371, &quot;max&quot;)}
+<pre><code class="language-python">{&quot;visits&quot;: (1482, &quot;+&quot;), &quot;max_duration&quot;: (371, &quot;max&quot;)}
 </code></pre>
-
 <p>Returns a single number of accepted (successfully upserted) edges (0 or 1).</p>
 <p>Note: If operator is "vertex_must_exist" then edge will only be created if both vertex exists in graph.
       Otherwise missing vertices are created with the new edge.</p>
@@ -645,19 +647,17 @@ See documentation of <code>getEdgeCountFrom</code> above for more details.</p>
 <p>Upserts multiple edges (of the same type).</p>
 <p>See the description of <code>upsertEdge</code> for generic information.</p>
 <p>The <code>edges</code> argument is expected to be a list in of tuples in this format:</p>
-<pre><code class="python">[
+<pre><code class="language-python">[
   (&lt;source_vertex_id&gt;, &lt;target_vertex_id&gt;, {&lt;attribute_name&gt;: &lt;attribute_value&gt;|(&lt;attribute_name&gt;, &lt;operator&gt;), …})
   ⋮
 ]
 </code></pre>
-
 <p>Example:</p>
-<pre><code class="python">[
+<pre><code class="language-python">[
   (17, &quot;home_page&quot;, {&quot;visits&quot;: (35, &quot;+&quot;), &quot;max_duration&quot;: (93, &quot;max&quot;)}),
   (42, &quot;search&quot;, {&quot;visits&quot;: (17, &quot;+&quot;), &quot;max_duration&quot;: (41, &quot;max&quot;)}),
 ]
 </code></pre>
-
 <p>Returns a single number of accepted (successfully upserted) edges (0 or positive integer).</p>
 <p>Documentation: <a href="https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#post-graph-graph_name-upsert-the-given-data">POST /graph</a></p>
 <h2 id="getedges">getEdges</h2>
@@ -760,8 +760,8 @@ If <code>targetVertexType</code> is specified, then <code>edgeType</code> must a
       
     </div>
     
-      <script src="../assets/javascripts/vendor.77e55a48.min.js"></script>
-      <script src="../assets/javascripts/bundle.9554a270.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing"}</script>
+      <script src="../assets/javascripts/vendor.6a3d08fc.min.js"></script>
+      <script src="../assets/javascripts/bundle.71201edf.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing"}</script>
       
       <script>
         app = initialize({

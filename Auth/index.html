@@ -9,7 +9,7 @@
       
       
       <link rel="shortcut icon" href="../pyTigerGraphLogo-removebg-preview.png">
-      <meta name="generator" content="mkdocs-1.1.2, mkdocs-material-6.0.2">
+      <meta name="generator" content="mkdocs-1.1.2, mkdocs-material-6.1.0">
     
     
       
@@ -17,10 +17,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.38780c08.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.bc7e593a.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.3f72e892.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab28b872.min.css">
         
       
     
@@ -67,7 +67,9 @@
       
     </div>
     
-      <header class="md-header" data-md-component="header">
+      
+
+<header class="md-header" data-md-component="header">
   <nav class="md-header-nav md-grid" aria-label="Header">
     <a href=".." title="pyTigerGraph" class="md-header-nav__button md-logo" aria-label="pyTigerGraph">
       
@@ -151,7 +153,9 @@
               <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
-                    <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+                    
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
     <a href=".." title="pyTigerGraph" class="md-nav__button md-logo" aria-label="pyTigerGraph">
       
@@ -452,20 +456,18 @@ Instead, <a href="https://docs.tigergraph.com/admin/admin-guide/user-access-mana
 grant them the <a href="https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#roles-and-privileges">appropriate privileges through roles</a>,
 then use those users to access the database.</p>
 <p>It is recommended to not push any form of authentication information to version control software. Because of this, we recommend to create a <code>cfg.py</code> file that looks like this:</p>
-<pre><code class="python">secret = &quot;YOUR_SECRET_HERE&quot;
+<pre><code class="language-python">secret = &quot;YOUR_SECRET_HERE&quot;
 token = &quot;&quot;
 password = &quot;YOUR_PASSWORD_HERE&quot;
 </code></pre>
-
 <p>You can then import this config file into your Python applications, and add <code>cfg.py</code> to your <code>.gitignore</code>. To create a connection to your database, simply:</p>
-<pre><code class="python">import pyTigerGraph as tg 
+<pre><code class="language-python">import pyTigerGraph as tg 
 import cfg
 
 cfg.token = tg.TigerGraphConnection(host=&quot;&lt;hostname&gt;&quot;, graphname=&quot;&lt;graph_name&gt;&quot;).getToken(cfg.secret, &quot;&lt;token_lifetime&gt;&quot;)[0]
 
 conn = tg.TigerGraphConnection(host=&quot;&lt;hostname&gt;&quot;, graphname=&quot;&lt;graph_name&gt;&quot;, password=cfg.password, apiToken=cfg.token)
 </code></pre>
-
 <p>Substitute the hostname and graph name with the correct credentials, as well as the desired lifetime of the API token fetched.</p>
                 
               
@@ -533,8 +535,8 @@ conn = tg.TigerGraphConnection(host=&quot;&lt;hostname&gt;&quot;, graphname=&quo
       
     </div>
     
-      <script src="../assets/javascripts/vendor.77e55a48.min.js"></script>
-      <script src="../assets/javascripts/bundle.9554a270.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing"}</script>
+      <script src="../assets/javascripts/vendor.6a3d08fc.min.js"></script>
+      <script src="../assets/javascripts/bundle.71201edf.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing"}</script>
       
       <script>
         app = initialize({

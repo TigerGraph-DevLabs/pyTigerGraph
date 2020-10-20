@@ -9,7 +9,7 @@
       
       
       <link rel="shortcut icon" href="pyTigerGraphLogo-removebg-preview.png">
-      <meta name="generator" content="mkdocs-1.1.2, mkdocs-material-6.0.2">
+      <meta name="generator" content="mkdocs-1.1.2, mkdocs-material-6.1.0">
     
     
       
@@ -17,10 +17,10 @@
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.38780c08.min.css">
+      <link rel="stylesheet" href="assets/stylesheets/main.bc7e593a.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.3f72e892.min.css">
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab28b872.min.css">
         
       
     
@@ -67,7 +67,9 @@
       
     </div>
     
-      <header class="md-header" data-md-component="header">
+      
+
+<header class="md-header" data-md-component="header">
   <nav class="md-header-nav md-grid" aria-label="Header">
     <a href="." title="pyTigerGraph" class="md-header-nav__button md-logo" aria-label="pyTigerGraph">
       
@@ -151,7 +153,9 @@
               <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
-                    <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+                    
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
     <a href="." title="pyTigerGraph" class="md-nav__button md-logo" aria-label="pyTigerGraph">
       
@@ -515,18 +519,16 @@
 <p>To download pyTigerGraph, simply run:
 <code>pip3 install pyTigerGraph</code>
 Once the package installs, you can import it and instantiate a connection to your database:</p>
-<pre><code class="py">import pyTigerGraph as tg
+<pre><code class="language-py">import pyTigerGraph as tg
 
 conn = tg.TigerGraphConnection(host=&quot;&lt;hostname&gt;&quot;, graphname=&quot;&lt;graph_name&gt;&quot;, username=&quot;&lt;username&gt;&quot;, password=&quot;&lt;password&gt;&quot;, apiToken=&quot;&lt;api_token&gt;&quot;)
 </code></pre>
-
 <p>If your database is not using the standard ports (or they are mapped), you can use the following arguments to specify those:
 - restppPort (default 9000): <a href="https://docs.tigergraph.com/dev/restpp-api/restpp-requests">REST++ API port</a>
 - gsPort (default: 14240): <a href="https://docs.tigergraph.com/ui/graphstudio/overview#TigerGraphGraphStudioUIGuide-GraphStudioOn-Premises">GraphStudio port</a></p>
 <p>For example, in case of using a local virtual machine with the ports mapped:</p>
-<pre><code class="py">conn = tg.TigerGraphConnection(host=&quot;localhost&quot;, restppPort=25900, gsPort=25240, graphname=&quot;MyGraph&quot;, username=&quot;tigergraph&quot;, password=&quot;tigergraph&quot;, apiToken=&quot;2aa016d747ede9gg6da3drslm98srfoj&quot;)
+<pre><code class="language-py">conn = tg.TigerGraphConnection(host=&quot;localhost&quot;, restppPort=25900, gsPort=25240, graphname=&quot;MyGraph&quot;, username=&quot;tigergraph&quot;, password=&quot;tigergraph&quot;, apiToken=&quot;2aa016d747ede9gg6da3drslm98srfoj&quot;)
 </code></pre>
-
 <p>For more details on establishing a connection, read the <a href="GettingStarted/">Getting Started</a> page.</p>
 <h2 id="example-projects">Example Projects</h2>
 <ul>
@@ -603,8 +605,8 @@ conn = tg.TigerGraphConnection(host=&quot;&lt;hostname&gt;&quot;, graphname=&quo
       
     </div>
     
-      <script src="assets/javascripts/vendor.77e55a48.min.js"></script>
-      <script src="assets/javascripts/bundle.9554a270.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing"}</script>
+      <script src="assets/javascripts/vendor.6a3d08fc.min.js"></script>
+      <script src="assets/javascripts/bundle.71201edf.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing"}</script>
       
       <script>
         app = initialize({
