@@ -32,7 +32,7 @@ class TigerGraphConnection(object):
                                                             Use `getEdgeTypes()` to fetch the list of edge types currently in the graph.
     """
 
-    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9000", gsPort="14240", apiToken="", gsqlVersion="", useCert=False, certPath=None):
+    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9000", gsPort="14240", apiToken="", gsqlVersion="", gsqlPath="", useCert=False, certPath=""):
         """Initiate a connection object.
 
         Arguments
@@ -49,10 +49,11 @@ class TigerGraphConnection(object):
                                when a new version of the database is shipper. In these cases an appropriate GSQL client version needs to be
                                manually specified (typically the latest available version lesser than the database version).
                                You can check the list of available GSQL clients at https://bintray.com/tigergraphecosys/tgjars/gsql_client
+        - `gsqlPath`:          The folder/directory where the GSQL client JAR(s) will be stored
         - `useCert`:           True if you need to use a certificate because the server is secure (such as on TigerGraph
                                Cloud). This needs to be False when connecting to an unsecure server such as a TigerGraph Developer instance.
                                When True the certificate would be downloaded when it is first needed.
-        - `certPath`:          The location/directory _and_ the name of the SSL certification file where the certification should be stored.
+        - `certPath`:          The folder/directory _and_ the name of the SSL certification file where the certification should be stored.
         """
 
         self.tgLocation = urllib.parse.urlparse(host)
@@ -64,28 +65,34 @@ class TigerGraphConnection(object):
         self.restppUrl = self.host + ":" + self.restppPort
         self.gsPort = str(gsPort)
         self.gsUrl = self.host + ":" + self.gsPort
+        self.serverUrl = self.tgLocation.netloc + ":" + self.gsPort
         self.apiToken = apiToken
         self.authHeader = {'Authorization': "Bearer " + self.apiToken}
         self.debug = False
         self.schema = None
         self.ttkGetEF = None  # TODO: this needs to be rethought, or at least renamed
 
-        # GSQL client related variables
         self.gsqlInitiated = False
-        self.useCert = useCert  # TODO: if self.tgLocation.scheme == 'https', should we throw exception here or let it be thrown later when gsql is called?
-        self.certPath = certPath
         self.gsqlVersion = gsqlVersion
-        # Below variables are set during GSQL init
-        self.certLocation = ""  # TODO: is it not the same as self.certPath?
-        self.jarLocation = ""
+        self.gsqlPath = gsqlPath
+        if not self.gsqlPath:
+            self.gsqlPath = os.path.join("~", ".tigergraph")
+        self.gsqlPath = os.path.expanduser(self.gsqlPath)
         self.jarName = ""
-        self.url = self.tgLocation.netloc + ":" + self.gsPort
+
+        self.certDownloaded = False
+        self.useCert = useCert  # TODO: if self.tgLocation.scheme == 'https' and userCert == False, should we throw exception here or let it be thrown later when gsql is called?
+        self.certPath = certPath
+        if not self.certPath:
+            self.certPath = os.path.join("~", ".tigergraph", self.tgLocation.netloc.replace(".", "_") + "-" + self.graphname + "-cert.txt")
+        self.certPath = os.path.expanduser(self.certPath)
+        self.downloadCertificate()
 
     # Private functions ========================================================
 
     def _errorCheck(self, res):
         """Checks if the JSON document returned by an endpoint has contains error: true; if so, it raises an exception.
-        
+
         Arguments
         - `res`:  The JSON document returned by an endpoint
         """
@@ -106,7 +113,7 @@ class TigerGraphConnection(object):
         - `params`:    Request URL parameters.
         """
         if self.debug:
-            print(method + " " + url + (" => " + str(data) if data else ""))
+            print(method + " " + url + ("\n" + json.dumps(data, indent=2) if data else ""))
         if authMode == "pwd":
             _auth = (self.username, self.password)
         else:
@@ -118,11 +125,11 @@ class TigerGraphConnection(object):
         if headers:
             _headers.update(headers)
         if method == "POST":
-            _data = data
+            _data = data  # TODO: check content type and convert from JSON if necessary
         else:
             _data = None
 
-        if self.useCert and self.certPath is not None:
+        if self.useCert and self.certDownloaded:
             res = requests.request(method, url, auth=_auth, headers=_headers, data=_data, params=params, verify=self.certPath)
         else:
             res = requests.request(method, url, auth=_auth, headers=_headers, data=_data, params=params)
@@ -251,8 +258,20 @@ class TigerGraphConnection(object):
                     i += 1
                     l = res[i]
                 txt = txt.rstrip(" \n")
+
+                fds = []
+                fd = re.findall("define\s+filename\s+.+?;", txt.replace("\n", " "), re.IGNORECASE)
+                for f in fd:
+                    tmp = re.sub("define\s+filename\s+", "", f, 0, re.IGNORECASE).rstrip(";")
+                    tmp = re.split("\s+=\s+", tmp)
+                    if len(tmp) == 2:
+                        tmp = (tmp[0], tmp[1])
+                    else:
+                        tmp = (tmp[0], "")
+                    fds.append(tmp)
+
                 i -= 1
-                self.schema["LoadingJobs"].append({"Name": jobName, "Statement": txt})
+                self.schema["LoadingJobs"].append({"Name": jobName, "FilenameDefinitions": fds, "Statement": txt})
 
             # Processing queries
             elif l.startswith("Queries:"):
@@ -414,6 +433,8 @@ class TigerGraphConnection(object):
         """
         if not self.schema or force:
             self.schema = self._get(self.gsUrl + "/gsqlserver/gsql/schema?graph=" + self.graphname, authMode="pwd")
+            ret = self._get(self.restppUrl + "/graph/" + self.graphname + "/vertices/dummy", resKey="", skipCheck=True)
+            self.schema["Version"] = ret["version"]["schema"]
         if full:
             if "UDTs" not in self.schema or force:
                 self._getUDTs()
@@ -425,6 +446,10 @@ class TigerGraphConnection(object):
             if "Groups" not in self.schema or force:
                 self._getGroups()
         return self.schema
+
+    def getSchemaVersion(self, force=False):
+        """Retrieves the schema version."""
+        return self.getSchema(force=force)["Version"]
 
     def getUDTs(self):
         """Returns the list of User Defined Types (names only)."""
@@ -1718,7 +1743,7 @@ class TigerGraphConnection(object):
             edges=json_up
         )
 
-    # Token management =========================================================
+    # Authentication and security ==============================================
 
     def getToken(self, secret, setToken=True, lifetime=None):
         """Requests an authorization token.
@@ -1810,6 +1835,40 @@ class TigerGraphConnection(object):
         if "Endpoint is not found from url = /requesttoken" in res["message"]:
             raise TigerGraphException("REST++ authentication is not enabled, can't delete token.", None)
         raise TigerGraphException(res["message"], (res["code"] if "code" in res else None))
+
+    def createSecret(self, alias=""):
+        """Issues a `CREATE SECRET` GSQL statement and returns the secret generated by that statement."""
+        if not self.gsqlInitiated:
+            self.initGsql()
+
+        response = self.gsql("CREATE SECRET " + alias)
+        try:
+            secret = re.search('The secret\: (\w*)', response.replace('\n', ''))[1]
+            return secret
+        except:
+            return None
+
+    # TODO: showSecret()
+
+    def downloadCertificate(self):
+        """In case of secure connection downloads an SSL certification (if not available already)"""
+        if self.useCert:
+            if os.path.exists(self.certPath):
+                self.certDownloaded = True
+            else:
+                if self.debug:
+                    print("Downloading SSL certificate")
+                # TODO: Windows support
+
+                # Check if OpenSSL is installed.
+                if not shutil.which('openssl'):
+                    raise TigerGraphException("Could not find OpenSSL. Please install.", None)
+
+                os.system("openssl s_client -connect " + self.serverUrl + " < /dev/null 2> /dev/null | openssl x509 -text > " + self.certPath)  # TODO: Python-native SSL?
+                if os.stat(self.certPath).st_size == 0:
+                    raise TigerGraphException("Certificate download failed. Please check that the server is online.", None)
+
+                self.certDownloaded = True
 
     # Other functions ==========================================================
 
@@ -1925,6 +1984,11 @@ class TigerGraphConnection(object):
         else:
             raise TigerGraphException("\"" + component + "\" is not a valid component.", None)
 
+    def getEdition(self):
+        """Gets the database edition information"""
+        ret = self._get(self.restppUrl + "/graph/" + self.graphname + "/vertices/dummy", resKey="", skipCheck=True)
+        return ret["version"]["edition"]
+
     def getLicenseInfo(self):
         """Returns the expiration date and remaining days of the license.
 
@@ -1945,39 +2009,18 @@ class TigerGraphConnection(object):
 
     # GSQL support =================================================
 
-    def initGsql(self, jarLocation="", certLocation=""):
-        """Initialises the GSQL functionality, downloads the appropriate GSQL client JAR (if not available already) and an SSL certification.
-
-        Arguments:
-        - `jarLocation`:  The folder/directory where the GSQL client JAR(s) will be stored.
-        - `certLocation`: The folder/directory _and_ the name of the SSL certification file.
-        - `gsqlVersion`:      Alternative GSQL client gsqlVersion to be used. Format: x.y.z (positive integer values).
-                          If the given gsqlVersion of GSQL client JAR is not available at https://bintray.com/tigergraphecosys/tgjars/gsql_client then
-                          manually specify the next higher gsqlVersion number available.
-        """
-
-        # Setting platform specific defaults if params are not specified
-        if not jarLocation:
-            jarLocation = os.path.join("~", ".gsql")
-        if not certLocation:
-            certLocation = os.path.join(jarLocation, "my-cert.txt")
-
-        # Computing absolute paths
-        self.jarLocation = os.path.expanduser(jarLocation)
-        self.certLocation = os.path.expanduser(certLocation)
-        if self.debug:
-            print("JAR location: " + self.jarLocation)
-            print("SSL certificate: " + self.certLocation)
+    def initGsql(self):
+        """Initialises the GSQL functionality: downloads the appropriate GSQL client JAR (if not available already)."""
 
         # Check if Java runtime is installed.
         if not shutil.which("java"):
             raise TigerGraphException("Could not find Java runtime. Please download and install from https://www.oracle.com/java/technologies/javase-downloads.html", None)
 
         # Create a directory for the JAR file if it does not exist.
-        if not os.path.exists(self.jarLocation):
+        if not os.path.exists(self.gsqlPath):
             if self.debug:
-                print("Jar location not found, creating")
-            os.mkdir(self.jarLocation)
+                print("GSQL location was not found, creating")
+            os.mkdir(self.gsqlPath)
 
         # Download the gsql_client.jar file if not yet available locally
         if self.gsqlVersion:
@@ -1985,13 +2028,11 @@ class TigerGraphConnection(object):
                 print("Using version " + self.gsqlVersion + " instead of " + self.getVer())
         else:
             self.gsqlVersion = self.getVer()
-        self.jarName = os.path.join(self.jarLocation, 'gsql_client-' + self.gsqlVersion + ".jar")
+        self.jarName = os.path.join(self.gsqlPath, 'gsql_client-' + self.gsqlVersion + ".jar")
         if not os.path.exists(self.jarName):
             if self.debug:
                 print("Jar not found, downloading to " + self.jarName)
-            jar_url = ('https://bintray.com/api/ui/download/tigergraphecosys/tgjars/'
-                       + 'com/tigergraph/client/gsql_client/' + self.gsqlVersion
-                       + '/gsql_client-' + self.gsqlVersion + '.jar')
+            jar_url = ('https://bintray.com/api/ui/download/tigergraphecosys/tgjars/com/tigergraph/client/gsql_client/' + self.gsqlVersion + '/gsql_client-' + self.gsqlVersion + '.jar')
             res = requests.get(jar_url)
             if res.status_code == 404:
                 if self.debug:
@@ -2000,19 +2041,6 @@ class TigerGraphConnection(object):
             if res.status_code != 200:  # The client JAR was not successfully downloaded for whatever other reasons
                 res.raise_for_status()
             open(self.jarName, 'wb').write(res.content)
-
-        if self.useCert and not os.path.exists(self.certLocation):  # HTTP/HTTPS
-            if self.debug:
-                print("Downloading SSL certificate")
-            # TODO: Windows support
-
-            # Check if OpenSSL is installed.
-            if not shutil.which('openssl'):
-                raise TigerGraphException("Could not find OpenSSL. Please install.", None)
-
-            os.system("openssl s_client -connect " + self.url + " < /dev/null 2> /dev/null | openssl x509 -text > " + self.certLocation)  # TODO: Python-native SSL?
-            if os.stat(self.certLocation).st_size == 0:
-                raise TigerGraphException("Certificate download failed. Please check that the server is online.", None)
 
         self.gsqlInitiated = True
 
@@ -2034,12 +2062,12 @@ class TigerGraphConnection(object):
                '-jar', self.jarName]
 
         if self.useCert:
-            cmd += ['-cacert', self.certLocation]
+            cmd += ['-cacert', self.certPath]
 
         cmd += [
             '-u', self.username,
             '-p', self.password,
-            '-ip', self.url]
+            '-ip', self.serverUrl]
 
         comp = subprocess.run(cmd + options + [query],
                               stdout=subprocess.PIPE,
@@ -2056,9 +2084,9 @@ class TigerGraphConnection(object):
 
         if "Connection refused." in stdout:
             if self.tgLocation.scheme == "https" and not self.useCert:
-                raise TigerGraphException("Connection to " + self.url + " was refused. Certificate was not used.", None)
+                raise TigerGraphException("Connection to " + self.serverUrl + " was refused. Certificate was not used.", None)
             else:
-                raise TigerGraphException("Connection to " + self.url + " was refused.", None)
+                raise TigerGraphException("Connection to " + self.serverUrl + " was refused.", None)
 
         try:
             json_string = re.search('(\{|\[).*$', stdout.replace('\n', ''))[0]
@@ -2068,18 +2096,120 @@ class TigerGraphConnection(object):
         else:
             return json_object
 
-    def createSecret(self, alias=""):
-        """Issues a `CREATE SECRET` GSQL statement and returns the secret generated by that statement."""
-        if not self.gsqlInitiated:
-            self.initGsql()
+    # Data sources =================================================
 
-        response = self.gsql("CREATE SECRET " + alias)
-        try:
-            secret = re.search('The secret\: (\w*)', response.replace('\n', ''))[1]
-            return secret
-        except:
+    def getDataSources(self, dsType=None):
+        """Returns the list of data source names, optionally filtered by type (AWS S3, Kafka)
+
+        @param str dsType:
+            The type of the data sources to be listed: "s3" or "kafka". If not specified, all types included.
+        """
+        res = self.getSchema()["DataSources"]
+        ret = []
+        for ds in res:
+            if ds["Type"] == dsType or not dsType:
+                ret.append((ds["Name"], ds["Type"]))
+        return ret
+
+    def getDataSource(self, dsName):
+        """Retrieves the details of the specified data source."""
+        res = self.getSchema()["DataSources"]
+        for ds in res:
+            if ds["Name"] == dsName:
+                return ds
+        return {}
+
+    # Loading jobs =================================================
+
+    def getLoadingJobs(self):
+        """Returns the list of loading job names of the graph"""
+        res = self.getSchema()["LoadingJobs"]
+        ret = []
+        for lj in res:
+            ret.append(lj["Name"])
+        return ret
+
+    def getLoadingJob(self, jobName):
+        """Returns the details of the specified loading job.
+
+        TODO: We should probably extract details (such as file definitions and destination clauses). Maybe not here, but in `getSchema()`.
+        """
+        res = self.getSchema()["LoadingJobs"]
+        for lj in res:
+            if lj["Name"] == jobName:
+                return lj
+        return None
+
+    def _loadingJobControl(self, action, jobId):
+        """Base function for most loading job related functions
+
+        @param str action:
+            One of the possible actions: pause, resume, stop, checkprogress
+        @param str jobId:
+            The ID of the (active) job
+        """
+        cmd = self.gsUrl + "/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action="
+
+        res = self._get(cmd + "&job_id=" + jobId, authMode="pwd")
+
+    def startLoadingJob(self, name, files, streaming=False):
+        """Starts a loading job.
+
+        @param str name:
+            The name of the loading job.
+        @param list files:
+            A list of tuples describing the files to be used in this execution (i.e. the info specified in the `USING` clause of `RUN LOADING JOB`)
+            Format: `(<filename_var>, <data_source_name>, <file>)`, where
+              - <filename_far> is the filename variable from DEFINE FILENAME
+              - <data_source_name> is the name of the datasource, one of: "file", an S3 datasource name, a Kafka data source name
+              - <file> is filename or bucket/object or topic name
+        @param bool streaming:
+            Is this loading job a streaming one (i.e. using Kafka data source)?
+
+        TODO: pre-check existence of S3 and Kafka data sources?
+        """
+        fs = []
+        if isinstance(files, tuple):
+            fs = [files]
+        elif isinstance(files, list):
+            fs = files
+        else:
             return None
 
-    # TODO: showSecret()
+        ds = []
+        for f in fs:
+            ds.append({
+                "filename": f[0],  # The filename variable from DEFINE FILENAME
+                "name": f[1],      # The name of the datasource, one of: "file", an S3 datasource name, a Kafka data source name
+                "path": f[2]       # Filename or bucket/object or topic name
+            })
+
+        data = {
+            "jobs": [{
+                "name": name,
+                "streaming": streaming,
+                "dataSources": ds
+            }]
+        }
+        data = json.dumps(data)
+
+        res = self._post(self.gsUrl + "/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action=start", data=data, authMode="pwd")[name]
+        msg = res["message"]
+        msg = msg[msg.find("Loading log: '")+14:]
+        log = msg[:msg.find("'")]
+        ret = {"jobId": res["results"], "log": log}
+        return ret
+
+    def pauseLoadingJob(self, jobId):
+        return self._loadingJobControl("pause", jobId)
+
+    def resumeLoadingJob(self, jobId):
+        return self._loadingJobControl("resume", jobId)
+
+    def stopLoadingJob(self, jobId):
+        return self._loadingJobControl("stop", jobId)
+
+    def getLoadingJobStatus(self, jobId):
+        return self._loadingJobControl("checkprogress", jobId)
 
 # EOF
