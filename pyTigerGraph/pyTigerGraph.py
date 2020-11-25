@@ -2148,11 +2148,9 @@ class TigerGraphConnection(object):
         @param str jobId:
             The ID of the (active) job
         """
-        cmd = self.gsUrl + "/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action="
+        return self._get(self.gsUrl + "/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action=" + action + "&jobId=" + jobId, authMode="pwd")
 
-        res = self._get(cmd + "&job_id=" + jobId, authMode="pwd")
-
-    def startLoadingJob(self, name, files, streaming=False):
+    def startLoadingJob(self, name, files=[], streaming=False):
         """Starts a loading job.
 
         @param str name:
@@ -2195,8 +2193,11 @@ class TigerGraphConnection(object):
 
         res = self._post(self.gsUrl + "/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action=start", data=data, authMode="pwd")[name]
         msg = res["message"]
-        msg = msg[msg.find("Loading log: '")+14:]
-        log = msg[:msg.find("'")]
+        if "please check the GSQL log" in msg:
+            log = ""
+        else:
+            msg = msg[msg.find("Loading log: '")+14:]
+            log = msg[:msg.find("'")]
         ret = {"jobId": res["results"], "log": log}
         return ret
 
