@@ -37,6 +37,19 @@ class TigerGraphConnection(TigerGraphBase):
 
     # Generic DML functions ====================================================
 
+    def _upsertAttrs(self, attributes):
+        """Transforms attributes (provided as a table) into a hierarchy as expect by the upsert functions."""
+        if not isinstance(attributes, dict):
+            return {}
+        vals = {}
+        for attr in attributes:
+            val = attributes[attr]
+            if isinstance(val, tuple):
+                vals[attr] = {"value": val[0], "op": val[1]}
+            else:
+                vals[attr] = {"value": val}
+        return vals
+
     def upsertData(self, data):
         """Upserts data (vertices and edges) from a JSON document or equivalent object structure.
 

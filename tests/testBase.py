@@ -21,8 +21,7 @@ print("Start\n" + ("-" * 100))
 
 # Connection and setup =========================================================
 
-conn = tg.TigerGraphBase(host="http://localhost")
-conn.debug = True
+conn = tg.TigerGraphBase(host="http://localhost", debug=True)
 
 # Metadata related functions ===================================================
 

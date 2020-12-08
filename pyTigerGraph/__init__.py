@@ -1,4 +1,4 @@
-from pyTigerGraph.pyTigerGraphCommon import TigerGraphException
+from pyTigerGraph.pyTigerGraphException import TigerGraphException
 from pyTigerGraph.pyTigerGraphGSQL_new import TigerGraphGSQL
 from pyTigerGraph.pyTigerGraphBase import TigerGraphBase
 from pyTigerGraph.pyTigerGraph import TigerGraphConnection

@@ -13,7 +13,7 @@ First, you will need to [create a `TigerGraphConnection`](GettingStarted.md).
 
 You can then initialize and test your connection by issuing any GSQL command like:
 ```python
-print(conn.gsql('ls', options=[]))
+print(conn.execute('ls', options=[]))
 ```
 
 See the [GSQL101 notebook](https://github.com/pyTigerGraph/pyTigerGraph/blob/master/examples/GSQL101%20-%20PyTigerGraph.ipynb) for more examples.

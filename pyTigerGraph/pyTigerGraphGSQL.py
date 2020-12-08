@@ -7,12 +7,12 @@ import shutil
 import subprocess
 import urllib.parse
 
-from pyTigerGraph.pyTigerGraphCommon import TigerGraphException
+from pyTigerGraph.pyTigerGraphException import TigerGraphException
 
 
 class pyTigerGraphGSQL(object):
 
-    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", gsqlVersion=None, useCert=False, certPath=""):
+    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", gsqlVersion=None, useCert=False, certPath="", debug=False):
         _host = urllib.parse.urlparse(host)
         self.scheme = _host.scheme
         self.server = _host.netloc
@@ -23,7 +23,7 @@ class pyTigerGraphGSQL(object):
         self.password = password
         self.gsqlVersion = gsqlVersion
 
-        self.tgDir = os.path.join("~", ".tigergraph")
+        self.tgDir = os.path.expanduser(os.path.join("~", ".tigergraph"))
 
         self.useCert = useCert  # TODO: if self.scheme == 'https' and userCert == False, should we throw exception here or let it be thrown later when gsql is called?
         self.certPath = certPath
@@ -31,7 +31,7 @@ class pyTigerGraphGSQL(object):
         self.gsqlOk = False
         self.certOk = False
 
-        self.debug = False
+        self.debug = debug
 
     def _initGsql(self):
         """Initialises the GSQL functionality: downloads the appropriate GSQL client JAR (if not available already)."""
@@ -100,7 +100,7 @@ class pyTigerGraphGSQL(object):
         else:
             self.certOk = True
 
-    def gsql(self, query, useGlobal=False):
+    def execute(self, query, useGlobal=False):
         """Runs a GSQL query and process the output.
 
         :param str query:
