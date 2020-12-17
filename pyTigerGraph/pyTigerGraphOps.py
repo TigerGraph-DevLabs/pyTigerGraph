@@ -129,7 +129,7 @@ class TigerGraphOps(TigerGraphBase):
         """
         return self._get(self.gsUrl + "/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action=" + action + "&jobId=" + jobId, authMode="pwd")
 
-    def startLoadingJob(self, name, files=None, streaming=False):
+    def startLoadingJob(self, name: str, files: list = None, streaming: bool = False):
         """Starts a loading job.
 
         @param str name:
@@ -157,8 +157,8 @@ class TigerGraphOps(TigerGraphBase):
         for f in fs:
             ds.append({
                 "filename": f[0],  # The filename variable from DEFINE FILENAME
-                "name": f[1],      # The name of the datasource, one of: "file", an S3 datasource name, a Kafka data source name
-                "path": f[2]       # Filename or bucket/object or topic name
+                "name": f[1],  # The name of the datasource, one of: "file", an S3 datasource name, a Kafka data source name
+                "path": f[2]  # Filename or bucket/object or topic name
             })
 
         data = {
@@ -175,7 +175,7 @@ class TigerGraphOps(TigerGraphBase):
         if "please check the GSQL log" in msg:
             log = ""
         else:
-            msg = msg[msg.find("Loading log: '")+14:]
+            msg = msg[msg.find("Loading log: '") + 14:]
             log = msg[:msg.find("'")]
         ret = {"jobId": res["results"], "log": log}
         return ret

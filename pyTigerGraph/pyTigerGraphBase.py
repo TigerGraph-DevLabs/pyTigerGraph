@@ -8,7 +8,7 @@ import time
 import urllib.parse
 
 from pyTigerGraph.pyTigerGraphException import TigerGraphException
-from pyTigerGraph.pyTigerGraphGSQL import pyTigerGraphGSQL
+from pyTigerGraph.pyTigerGraphGSQL import TigerGraphGSQL
 
 
 class TigerGraphBase(object):
@@ -55,32 +55,32 @@ class TigerGraphBase(object):
 
         _host = urllib.parse.urlparse(host)
         self.host = _host.scheme + "://" + _host.netloc
-        
+
         self.graphname = graphname
         self.username = username
         self.password = password
-        
+
         self.restppPort = str(restppPort)
         self.restppUrl = self.host + ":" + self.restppPort
-        
+
         self.gsPort = str(gsPort)
         self.gsUrl = self.host + ":" + self.gsPort
-        
+
         self.apiToken = apiToken
         self.authHeader = {'Authorization': "Bearer " + self.apiToken}
-        
+
         self.debug = debug
         self.schema = None
-        
+
         self.ttkGetEF = None  # TODO: this needs to be rethought, or at least renamed
-        
+
         if gsqlVersion:
             self.gsqlVersion = gsqlVersion
             if self.gsqlVersion in self.VERSION_MAPPING:
                 self.gsqlVersion = self.VERSION_MAPPING[self.gsqlVersion]
         else:
             self.gsqlVersion = self.getVer()
-        
+
         self.tgDir = os.path.expanduser(os.path.join("~", ".tigergraph"))  # TODO This is where we should look for the config file
 
         self.certDownloaded = False
@@ -90,37 +90,37 @@ class TigerGraphBase(object):
             self.certPath = os.path.join("~", ".tigergraph", _host.netloc.replace(".", "_") + "-" + self.graphname + "-cert.txt")
         self.certPath = os.path.expanduser(self.certPath)
 
-        self.gsql = pyTigerGraphGSQL(self.host, self.graphname, self.username, self.password, self.gsqlVersion, self.useCert, self.certPath)
+        self.gsql = TigerGraphGSQL(self.host, self.graphname, self.username, self.password, self.gsqlVersion, self.useCert, self.certPath)
 
     # Private functions ========================================================
 
-    def _errorCheck(self, res) -> None:
+    def _errorCheck(self, res: dict) -> None:
         """Checks if the JSON document returned by an endpoint has contains error: true; if so, it raises an exception.
 
-        :param dict res:
+        :param res:
             The JSON document returned by an endpoint
         """
         if "error" in res and res["error"] and res["error"] != "false":  # Endpoint might return string "false" rather than Boolean false
             raise TigerGraphException(res["message"], (res["code"] if "code" in res else None))
 
-    def _req(self, method, url, authMode="token", headers=None, data=None, resKey="results", skipCheck=False, params=None) -> dict:
+    def _req(self, method: str, url: str, authMode: str = "token", headers: dict = None, data: str = None, resKey: str = "results", skipCheck: bool = False, params: [str, dict, list] = None) -> dict:
         """Generic REST++ API request
 
-        :param str method:
+        :param method:
             HTTP method, currently one of GET, POST or DELETE.
-        :param str url:
+        :param url:
             Complete REST++ API URL including path and parameters.
-        :param str authMode:
+        :param authMode:
             Authentication mode, one of 'token' (default) or 'pwd'.
         :param dict headers:
             Standard HTTP request headers.
-        :param str data:
+        :param data:
             Request payload, typically a JSON document.
-        :param str resKey:
+        :param resKey:
             The key to the JSON subdocument to be returned, default is 'result'.
-        :param bool skipCheck:
+        :param skipCheck:
             Skip error checking? Some endpoints return error to indicate that the requested action is not applicable; a problem, but not really an error.
-        :param str|dict|list params:
+        :param params:
             Request URL parameters.
         """
         if self.debug:
@@ -176,7 +176,7 @@ class TigerGraphBase(object):
         :param str|dict|list params:
             Request URL parameters.
         """
-        return self._req("GET", url, authMode, headers, None, resKey, skipCheck, params)
+        return self._req("GET", url, authMode, headers, "", resKey, skipCheck, params)
 
     def _post(self, url, authMode="token", headers=None, data=None, resKey="results", skipCheck=False, params=None):
         """Generic POST method.
@@ -1088,7 +1088,7 @@ class TigerGraphBase(object):
             segment = max(min(segment, 0), 100)
         return self._get(self.restppUrl + "/statistics/" + self.graphname + "?seconds=" + str(seconds) + "&segment=" + str(segment), resKey="")
 
-    def getVersion(self, raw=False) -> str|list:
+    def getVersion(self, raw=False) -> str | list:
         """Retrieves the git versions of all components of the system.
 
         :param bool raw:

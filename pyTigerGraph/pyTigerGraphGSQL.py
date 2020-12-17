@@ -10,7 +10,7 @@ import urllib.parse
 from pyTigerGraph.pyTigerGraphException import TigerGraphException
 
 
-class pyTigerGraphGSQL(object):
+class TigerGraphGSQL(object):
 
     def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", gsqlVersion=None, useCert=False, certPath="", debug=False):
         _host = urllib.parse.urlparse(host)
