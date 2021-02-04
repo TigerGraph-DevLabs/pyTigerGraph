@@ -303,7 +303,15 @@ class TigerGraphOps(TigerGraphBase):
         :param str|list groupName:
 
         """
-        pass
+        if isinstance(groupName, str):
+            gns = [groupName]
+        elif isinstance(groupName, list):
+            gns = groupName
+        else:
+            return
+
+        for gn in gns:
+            self.conn.execute("DROP GROUP " + gn)
 
     # Secrets and tokens =======================================================
 
