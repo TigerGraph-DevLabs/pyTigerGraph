@@ -1,46 +1,76 @@
 import json
-import urllib.parse
+import re
 
-import pandas as pd
-
-from pyTigerGraph.pyTigerGraphBase import TigerGraphBase, TigerGraphException
+from pyTigerGraph import TigerGraphBase, TigerGraphException
 
 
 class TigerGraphOps(TigerGraphBase):
     """Python wrapper for TigerGraph's REST++ and GSQL APIs, mostly for operations/data engineering."""
 
-    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9000", gsPort="14240", apiToken="", gsqlVersion="", tgDir="", useCert=False, certPath=""):
+    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9000", gsPort="14240", apiToken="", gsqlVersion="", tgPath="", useCert=False, certPath="", debug=False):
         """Initiate a connection object.
 
-        Arguments
-        - `host`:              The IP address or hostname of the TigerGraph server, including the scheme (`http` or `https`).
-        - `graphname`:         The default graph for running queries.
-        - `username`:          The username on the TigerGraph server.
-        - `password`:          The password for that user.
-        - `restppPort`:        The post for REST++ queries.
-        - `gsPort`:            The port of all other queries.
-        - `apiToken`:          A token to use when making queries. Ignored if REST++ authentication is not enabled.
-        - `gsqlVersion`:       The version of GSQL client to be used. Default to database version.
-                               pyTigerGraph can detect the version from the database, but in rare cases (when the changes/fixes do not impact
-                               the GSQL functionality) no new GSQL version is released
-                               when a new version of the database is shipper. In these cases an appropriate GSQL client version needs to be
-                               manually specified (typically the latest available version lesser than the database version).
-                               You can check the list of available GSQL clients at https://bintray.com/tigergraphecosys/tgjars/gsql_client
-        - `gsqlPath`:          The folder/directory where the GSQL client JAR(s) will be stored
-        - `useCert`:           True if you need to use a certificate because the server is secure (such as on TigerGraph
+        :param str host:
+            The IP address or hostname of the TigerGraph server, including the scheme (`http` or `https`).
+        :param str graphname:
+            The name of the graph.
+        :param str username:
+            The username on the TigerGraph server.
+        :param str password:
+            The password for that user.
+        :param str restppPort:
+            The port for REST++ queries.
+        :param str gsPort:
+            The port of all other queries (GSQL server).
+        :param str gsPort:
+            The port of all other queries (GSQL server).
+        :param str apiToken:
+            A token to use when making queries. Ignored if REST++ authentication is not enabled.
+        :param str gsqlVersion:
+            The version of GSQL client to be used. Default to database version.
+            pyTigerGraph can detect the version from the database, but in rare cases (when the changes/fixes do not impact the GSQL functionality) no new GSQL version is released
+            when a new version of the database is shipper. In these cases an appropriate GSQL client version needs to be manually specified (typically the latest available version
+            lesser than the database version).
+            You can check the list of available GSQL clients at https://bintray.com/tigergraphecosys/tgjars/gsql_client
+        :param str tgPath:
+            The directory where TigerGraph related configuration and certification files and downloaded executables are stored. Default is "~/.tigergraph"
+        :param bool useCert:
+            True if you need to use a certificate because the server is secure (such as on TigerGraph
                                Cloud). This needs to be False when connecting to an unsecure server such as a TigerGraph Developer instance.
                                When True the certificate would be downloaded when it is first needed.
-        - `certPath`:          The folder/directory _and_ the name of the SSL certification file where the certification should be stored.
+        :param str certPath:
+            The folder/directory _and_ the name of the SSL certification file where the certification should be stored.
+        :param bool debug:
+            Enables debug output.
         """
 
-        super().__init__(host, graphname, username, password, restppPort, gsPort, apiToken, gsqlVersion, tgDir, useCert, certPath)
+        super().__init__(host, graphname, username, password, restppPort, gsPort, apiToken, gsqlVersion, tgPath, useCert, certPath, debug)
 
-    # Graph related functions ==================================================
+    # Graphs ===================================================================
 
-    def createGraph(self):
+    def createGraph(self, graphname, vertexTypes, edgeTypes=None, tags=None):
+        """Creates a graph
+
+        :param str graphname:
+            The name of the graph.
+        :param str|list vertexTypes:
+            The name(s) of the vertex type(s) to be included in the graph.
+            Is its value is "*", all vertices and edges will be included.
+            Vertex type names can be one of "vertexType", "vertexType:tagName(s)", ("vertexType","tagName") or ("vertexType",["tagName", ...]).
+        :param str|list edgeTypes:
+            The name(s) of the edge type(s) to be included in the graph.
+            Ignored if `vertices` is "*".
+        :param str|list tags:
+            The name(s) of the tags applicable to all vertex types in the new graph.
+        """
         pass
 
-    def dropGraph(self):
+    def dropGraph(self, graphname):
+        """Creates a graph
+
+        :param str graphname:
+            The name of the graph.
+        """
         pass
 
     def clearGraphStore(self):
@@ -52,7 +82,7 @@ class TigerGraphOps(TigerGraphBase):
 
         Documentation: https://docs.tigergraph.com/dev/gsql-ref/ddl-and-loading/running-a-loading-job#clear-graph-store
         """
-        res = self.gsql("CLEAR GRAPH STORE -HARD", options=[])
+        res = self.conn.execute("CLEAR GRAPH STORE -HARD", False)
         if not ("Successfully cleared graph store" in res and "Successfully started GPE GSE RESTPP" in res):
             raise TigerGraphException("Error occurred while clearing graph store:\n" + res, None)
 
@@ -65,28 +95,36 @@ class TigerGraphOps(TigerGraphBase):
 
         Documentation: https://docs.tigergraph.com/dev/gsql-ref/ddl-and-loading/running-a-loading-job#drop-all
         """
-        res = self.gsql("DROP ALL", options=[])
+        res = self.conn.execute("DROP ALL", False)
         if not ("Successfully cleared graph store" in res and "Everything is dropped." in res):
             raise TigerGraphException("Error occurred while dropping all:\n" + res, None)
 
-    # Vertex related functions =================================================
+    # Vertex types =============================================================
 
     def createVertexType(self):
         pass
 
-    def createGlobalVertexType(self):
+    def alterVertexType(self):
         pass
 
     def dropVertexType(self):
         pass
 
-    def dropGlobalVertexType(self):
+    # Indices ==================================================================
+
+    def createIndex(self, indexName, vertexType, attributeName):
+        # CREATE [GLOBAL] SCHEMA_CHANGE JOB
+        # RUN [GLOBAL] SCHEMA_CHANGE JOB
+        # DROP [GLOBAL] SCHEMA_CHANGE JOB
         pass
 
-    # Edge related functions ===================================================
-
-    def createEdgeType(self):
+    def dropIndex(self, indexName):
+        # CREATE [GLOBAL] SCHEMA_CHANGE JOB
+        # RUN [GLOBAL] SCHEMA_CHANGE JOB
+        # DROP [GLOBAL] SCHEMA_CHANGE JOB
         pass
+
+    # Edge types ===============================================================
 
     def createUnDirectedEdgeType(self):
         pass
@@ -94,30 +132,62 @@ class TigerGraphOps(TigerGraphBase):
     def createDirectedEdgeType(self):
         pass
 
-    # Query related functions ==================================================
+    def alterEdgeType(self):
+        pass
 
-    # TODO: GET /showprocesslist/{graph_name}
-    #       https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-running-queries-showprocesslist-graph_name
+    def dropEgdeType(self):
+        pass
 
-    def runningQueries(self):
+    # User defined types =======================================================
+
+    def createUDT(self):
+        pass
+
+    def dropUDT(self):
+        pass
+
+    # Queries ==================================================================
+
+    def installQuery(self, queryName, force=False, optimize=False, distributed=False):
+        """Installs query/queries
+
+        :param str|list queryName:
+            One of: a single query name, a list of query names, "*" for all, "?" for all uninstalled.
+        """
+        pass
+
+    def optimizeQuery(self, queryName):
+        """Optimizes query/queries
+
+        :param str|list queryName:
+            One of: a single query name, a list of query names, "*" for all.
+        """
         pass
 
     def abortQuery(self):
         # GET /abortquery/{graph_name}
         pass
 
-    # Data source related functions ============================================
+    # Data sources =============================================================
 
-    def createS3DataSource(self):
+    def createS3DataSource(self, dsName, awsAccessKey, awsSecretKey):
         pass
 
-    def createKafkaDataSource(self):
+    def createKafkaDataSource(self, dsName, broker, params):
         pass
 
-    def dropDataSource(self):
+    def grantDataSource(self, dsName, graphName):
         pass
 
-    # Loading job related functions ============================================
+    def revokeDataSource(self, dsName, graphName):
+        pass
+
+    def dropDataSource(self, dsName):
+        pass
+
+    # Loading jobs =============================================================
+
+    # TODO: Loading job generation ;-)
 
     def _loadingJobControl(self, action, jobId):
         """Base function for most loading job related functions
@@ -127,7 +197,7 @@ class TigerGraphOps(TigerGraphBase):
         @param str jobId:
             The ID of the (active) job
         """
-        return self._get(self.gsUrl + "/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action=" + action + "&jobId=" + jobId, authMode="pwd")
+        return self.conn.get("/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action=" + action + "&jobId=" + jobId, authMode="pwd")
 
     def startLoadingJob(self, name: str, files: list = None, streaming: bool = False):
         """Starts a loading job.
@@ -170,7 +240,7 @@ class TigerGraphOps(TigerGraphBase):
         }
         data = json.dumps(data)
 
-        res = self._post(self.gsUrl + "/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action=start", data=data, authMode="pwd")[name]
+        res = self.conn.post("/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action=start", data=data, authMode="pwd")[name]
         msg = res["message"]
         if "please check the GSQL log" in msg:
             log = ""
@@ -191,6 +261,112 @@ class TigerGraphOps(TigerGraphBase):
 
     def getLoadingJobStatus(self, jobId):
         return self._loadingJobControl("checkprogress", jobId)
+
+    # Schema change jobs =======================================================
+
+    def runSchemaChangeJob(self, jobName):
+        pass
+
+    def dropSchemaChangeJob(self, jobName):
+        pass
+
+    # Users ====================================================================
+
+    def createuser(self, userName, password):
+        pass
+
+    def alterUser(self, userName, password):
+        pass
+
+    def dropUser(self, userName):
+        pass
+
+    # roxy groups ==============================================================
+
+    def createGroup(self, groupName, rule):
+        """Creates a proxy group.
+
+        ⚠️ Only users with the admin and superuser role can create a group.
+
+        :param str groupName:
+            The name of the new proxy group.
+        :param str rule:
+            A rule to match LDAP attributes  # TODO Can it be a complex rule like "role=engineer|role=admin"?
+        """
+        pass
+
+    def dropGroup(self, groupName):
+        """Drops proxy group(s).
+
+        ⚠️ Only users with the admin and superuser role can create a group.
+
+        :param str|list groupName:
+
+        """
+        pass
+
+    # Secrets and tokens =======================================================
+
+    def createSecret(self, alias) -> str:
+        """Issues a `CREATE SECRET` GSQL statement and returns the secret generated by that statement.
+
+        :param str alias:
+            The alias for the secret. Required, otherwise secret cannot be dropped.
+        """
+        response = self.conn.execute("CREATE SECRET " + alias)
+        try:
+            secret = re.search(r'The secret: (\w*)', response.replace('\n', ''))[1]
+            return secret
+        except re.error:
+            return ""
+
+    def dropSecret(self, alias):
+        pass;
+
+    # Tags =====================================================================
+
+    def createTag(self, tagName, description):
+        self.createTags((tagName, description))
+
+    def createTags(self, tagList):
+        """
+
+        :param list|tuple tagList:
+            List of (tagName, description) tuples.  # TODO Should it be instead dictionary?
+        """
+        # CREATE [GLOBAL] SCHEMA_CHANGE JOB
+        # RUN [GLOBAL] SCHEMA_CHANGE JOB
+        # DROP [GLOBAL] SCHEMA_CHANGE JOB
+        pass
+
+    def dropTag(self, tagName):
+        """
+
+        :param tagName:
+            A single tag name or a list of tag names.
+        """
+        # CREATE [GLOBAL] SCHEMA_CHANGE JOB
+        # RUN [GLOBAL] SCHEMA_CHANGE JOB
+        # DROP [GLOBAL] SCHEMA_CHANGE JOB
+        pass
+
+    def tagVertex(self, vertexTypeName):
+        """Marks vertex type(s) as taggable.
+
+        :param vertexName:
+            A single vertex type name or a list of vertex type names.
+        """
+
+    def untagVertex(self, vertexTypeName):
+        """Marks vertex type(s) as not taggable.
+
+        :param vertexName:
+            A single vertex type name or a list of vertex type names.
+        """
+        # CREATE [GLOBAL] SCHEMA_CHANGE JOB
+        # RUN [GLOBAL] SCHEMA_CHANGE JOB
+        # DROP [GLOBAL] SCHEMA_CHANGE JOB
+        pass
 
     # Other functions ==========================================================
 

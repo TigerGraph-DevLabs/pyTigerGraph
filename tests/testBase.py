@@ -4,8 +4,9 @@ import json
 
 sep = "-" * 60
 
-testMetadata = True
-testOthers = False
+testMetadata = False
+testOthers = True
+
 
 def pr(fn, res):
     print(fn + "\n")

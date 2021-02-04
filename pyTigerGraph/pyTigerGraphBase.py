@@ -1,26 +1,26 @@
-from datetime import datetime
 import json
-import os
-import pandas as pd
 import re
-import requests
-import time
-import urllib.parse
 
-from pyTigerGraph.pyTigerGraphException import TigerGraphException
-from pyTigerGraph.pyTigerGraphGSQL import TigerGraphGSQL
+import requests
+
+from .pyTigerDriver import TigerDriver as td
+
+
+class TigerGraphException(Exception):
+    """Generic TigerGraph specific exception.
+
+    Where possible, error message and code returned by TigerGraph will be used.
+    """
+
+    def __init__(self, message, code=None):
+        self.message = message
+        self.code = code
 
 
 class TigerGraphBase(object):
     """Base Python wrapper for TigerGraph's REST++ and GSQL APIs."""
 
-    VERSION_MAPPING = {
-        "2.5.1": "2.5.0",
-        "2.6.3": "2.6.2"
-    }
-
-    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9000", gsPort="14240", apiToken="", gsqlVersion="", useCert=False, certPath="", debug=False):
-        # TODO: configuration file 
+    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9000", gsPort="14240", apiToken="", gsqlVersion="", tgPath="", useCert=False, certPath="", debug=False):
         """Initiate a connection object.
 
         :param str host:
@@ -35,6 +35,8 @@ class TigerGraphBase(object):
             The port for REST++ queries.
         :param str gsPort:
             The port of all other queries (GSQL server).
+        :param str gsPort:
+            The port of all other queries (GSQL server).
         :param str apiToken:
             A token to use when making queries. Ignored if REST++ authentication is not enabled.
         :param str gsqlVersion:
@@ -43,6 +45,8 @@ class TigerGraphBase(object):
             when a new version of the database is shipper. In these cases an appropriate GSQL client version needs to be manually specified (typically the latest available version
             lesser than the database version).
             You can check the list of available GSQL clients at https://bintray.com/tigergraphecosys/tgjars/gsql_client
+        :param str tgPath:
+            The directory where TigerGraph related configuration and certification files and downloaded executables are stored. Default is "~/.tigergraph"
         :param bool useCert:
             True if you need to use a certificate because the server is secure (such as on TigerGraph
                                Cloud). This needs to be False when connecting to an unsecure server such as a TigerGraph Developer instance.
@@ -53,183 +57,26 @@ class TigerGraphBase(object):
             Enables debug output.
         """
 
-        _host = urllib.parse.urlparse(host)
-        self.host = _host.scheme + "://" + _host.netloc
-
-        self.graphname = graphname
-        self.username = username
-        self.password = password
-
-        self.restppPort = str(restppPort)
-        self.restppUrl = self.host + ":" + self.restppPort
-
-        self.gsPort = str(gsPort)
-        self.gsUrl = self.host + ":" + self.gsPort
-
-        self.apiToken = apiToken
-        self.authHeader = {'Authorization': "Bearer " + self.apiToken}
+        self.conn = td(host, graphname, username, password,  restppPort, gsPort, apiToken, gsqlVersion, tgPath, useCert, certPath, debug)
 
         self.debug = debug
+        self.graphname = graphname  # Current graph
         self.schema = None
+        self.graphs = []  # TODO This should probably replace .schema (so that metadata for multiple graphs could be kept)
 
-        self.ttkGetEF = None  # TODO: this needs to be rethought, or at least renamed
+    # Metadata collection ======================================================
 
-        if gsqlVersion:
-            self.gsqlVersion = gsqlVersion
-            if self.gsqlVersion in self.VERSION_MAPPING:
-                self.gsqlVersion = self.VERSION_MAPPING[self.gsqlVersion]
-        else:
-            self.gsqlVersion = self.getVer()
-
-        self.tgDir = os.path.expanduser(os.path.join("~", ".tigergraph"))  # TODO This is where we should look for the config file
-
-        self.certDownloaded = False
-        self.useCert = useCert  # TODO: if self._host.scheme == 'https' and userCert == False, should we throw exception here or let it be thrown later when gsql is called?
-        self.certPath = certPath
-        if not self.certPath:
-            self.certPath = os.path.join("~", ".tigergraph", _host.netloc.replace(".", "_") + "-" + self.graphname + "-cert.txt")
-        self.certPath = os.path.expanduser(self.certPath)
-
-        self.gsql = TigerGraphGSQL(self.host, self.graphname, self.username, self.password, self.gsqlVersion, self.useCert, self.certPath)
-
-    # Private functions ========================================================
-
-    def _errorCheck(self, res: dict) -> None:
-        """Checks if the JSON document returned by an endpoint has contains error: true; if so, it raises an exception.
-
-        :param res:
-            The JSON document returned by an endpoint
-        """
-        if "error" in res and res["error"] and res["error"] != "false":  # Endpoint might return string "false" rather than Boolean false
-            raise TigerGraphException(res["message"], (res["code"] if "code" in res else None))
-
-    def _req(self, method: str, url: str, authMode: str = "token", headers: dict = None, data: str = None, resKey: str = "results", skipCheck: bool = False, params: [str, dict, list] = None) -> dict:
-        """Generic REST++ API request
-
-        :param method:
-            HTTP method, currently one of GET, POST or DELETE.
-        :param url:
-            Complete REST++ API URL including path and parameters.
-        :param authMode:
-            Authentication mode, one of 'token' (default) or 'pwd'.
-        :param dict headers:
-            Standard HTTP request headers.
-        :param data:
-            Request payload, typically a JSON document.
-        :param resKey:
-            The key to the JSON subdocument to be returned, default is 'result'.
-        :param skipCheck:
-            Skip error checking? Some endpoints return error to indicate that the requested action is not applicable; a problem, but not really an error.
-        :param params:
-            Request URL parameters.
-        """
-        if self.debug:
-            print(method + " " + url + ("\n" + json.dumps(data, indent=2) if data else ""))
-        if authMode == "pwd":
-            _auth = (self.username, self.password)
-        else:
-            _auth = None
-        if authMode == "token":
-            _headers = self.authHeader
-        else:
-            _headers = {}
-        if headers:
-            _headers.update(headers)
-        if method == "POST":
-            _data = data  # TODO: check content type and convert from JSON if necessary
-        else:
-            _data = None
-
-        if False and self.useCert and self.certDownloaded:
-            res = requests.request(method, url, auth=_auth, headers=_headers, data=_data, params=params, verify=self.certPath)
-        else:
-            res = requests.request(method, url, auth=_auth, headers=_headers, data=_data, params=params)
-
-        if self.debug:
-            print(res.url)
-        if res.status_code != 200:
-            res.raise_for_status()
-        res = json.loads(res.text)
-        if not skipCheck:
-            self._errorCheck(res)
-        if not resKey:
-            if self.debug:
-                print(res)
-            return res
-        if self.debug:
-            print(res[resKey])
-        return res[resKey]
-
-    def _get(self, url, authMode="token", headers=None, resKey="results", skipCheck=False, params=None):
-        """Generic GET method.
-
-        :param str url:
-            Complete REST++ API URL including path and parameters.
-        :param str authMode:
-            Authentication mode, one of 'token' (default) or 'pwd'.
-        :param dict headers:
-            Standard HTTP request headers.
-        :param str resKey:
-            The key to the JSON subdocument to be returned, default is 'result'.
-        :param bool skipCheck:
-            Skip error checking? Some endpoints return error to indicate that the requested action is not applicable; a problem, but not really an error.
-        :param str|dict|list params:
-            Request URL parameters.
-        """
-        return self._req("GET", url, authMode, headers, "", resKey, skipCheck, params)
-
-    def _post(self, url, authMode="token", headers=None, data=None, resKey="results", skipCheck=False, params=None):
-        """Generic POST method.
-
-        :param str url:
-            Complete REST++ API URL including path and parameters.
-        :param str authMode:
-            Authentication mode, one of 'token' (default) or 'pwd'.
-        :param dict headers:
-            Standard HTTP request headers.
-        :param str data:
-            Request payload, typically a JSON document.
-        :param str resKey:
-            The key to the JSON subdocument to be returned, default is 'result'.
-        :param bool skipCheck:
-            Skip error checking? Some endpoints return error to indicate that the requested action is not applicable; a problem, but not really an error.
-        :param str|dict|list params:
-            Request URL parameters.
-        """
-        return self._req("POST", url, authMode, headers, data, resKey, skipCheck, params)
-
-    def _delete(self, url, authMode="token"):
-        """Generic DELETE method.
-
-        :param str url:
-            Complete REST++ API URL including path and parameters.
-        :param str authMode:
-            Authentication mode, one of 'token' (default) or 'pwd'.
-        """
-        return self._req("DELETE", url, authMode)
-
-    # Metadata related functions ===============================================
-
-    def _getUDTs(self):
-        """Collects User Defined Types (UDTs) metadata.
-
-        Endpoint:      GET /gsqlserver/gsql/udtlist
-        Documentation: Not documented publicly
-        """
-        res = self._get(self.gsUrl + "/gsqlserver/gsql/udtlist?graph=" + self.graphname, authMode="pwd")
-        for u in res:
-            u["Name"] = u["name"]
-            u.pop("name")
-            u["Fields"] = u["fields"]
-            u.pop("fields")
-        self.schema["UDTs"] = res
+    def _getGraphs(self):
+        """Collects the names of all graphs in the database."""
+        pass
 
     def _getSchemaLs(self):
         """Collects metadata for various schema object types from the output of the `ls` gsql command."""
+        # TODO: Make it capable of collecting metadata for any graphs? `USE GRAPH graphname` before?
 
-        res = self.gsql.execute('ls')
+        res = self.conn.execute('ls')
 
-        for objType in ["VertexTypes", "EdgeTypes", "Indexes", "Queries", "LoadingJobs", "DataSources", "Graphs"]:
+        for objType in ["VertexTypes", "EdgeTypes", "Indexes", "Queries", "LoadingJobs", "DataSources", "Graphs"]: # TODO Remove "graph"
             if objType not in self.schema:
                 self.schema[objType] = []
 
@@ -305,7 +152,7 @@ class TigerGraphBase(object):
                 while line != "":
                     qName = line[4:line.find("(")]
                     dep = line.endswith('(deprecated)')
-                    txt = self.gsql.execute("SHOW QUERY " + qName).rstrip(" \n")
+                    txt = self.conn.execute("SHOW QUERY " + qName).rstrip(" \n")
                     txt = re.sub(qpatt, "CREATE", txt)
                     qs = self.schema["Queries"]
                     found = False
@@ -349,6 +196,7 @@ class TigerGraphBase(object):
                     line = res[i]
 
             # Processing graphs (actually, only one graph should be listed)
+            # TODO: Move graph metadata handling out from this functionality
             elif line.startswith("  - Graph"):
                 gName = line[10:line.find("(")]
                 self.schema["Graphs"].append({"Name": gName, "Statement": "CREATE GRAPH " + line[10:].replace(":v", "").replace(":e", ""), "Text": line[10:]})
@@ -357,6 +205,20 @@ class TigerGraphBase(object):
             else:
                 pass
             i += 1
+
+    def _getUDTs(self):
+        """Collects User Defined Types (UDTs) metadata.
+
+        Endpoint:      GET /gsqlserver/gsql/udtlist
+        Documentation: Not documented publicly
+        """
+        res = self.conn.get("/gsqlserver/gsql/udtlist?graph=" + self.graphname)
+        for u in res:
+            u["Name"] = u["name"]
+            u.pop("name")
+            u["Fields"] = u["fields"]
+            u.pop("fields")
+        self.schema["UDTs"] = res
 
     # TODO: GET /gsqlserver/gsql/queryinfo
     #       https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-gsqlserver-gsql-queryinfo-get-query-metadata
@@ -391,7 +253,7 @@ class TigerGraphBase(object):
     def _getUsers(self):
         """Collects user metedata."""
         us = []
-        res = self.gsql.execute("SHOW USER")
+        res = self.conn.execute("SHOW USER")
         res = res.split("\n")
         i = 0
         while i < len(res):
@@ -422,7 +284,7 @@ class TigerGraphBase(object):
     def _getGroups(self):
         """Collects proxy group metadata."""
         gs = []
-        res = self.gsql.execute("SHOW GROUP")
+        res = self.conn.execute("SHOW GROUP")
         res = res.split("\n")
         i = 0
         while i < len(res):
@@ -446,8 +308,35 @@ class TigerGraphBase(object):
             i += 1
         self.schema["Groups"] = gs
 
+    # Graphs ===================================================================
+
+    def getGraphs(self):
+        """Returns the names of all graphs in the database."""
+        pass
+
+    def getGraph(self, full=True, force=False):
+        """Returns the schema of the current graph (can be global graph).
+
+        Alias for `getSchema()`.
+        """
+        # TODO: Make it capable to return the schema of any graphs?
+        return self.getSchema(full, force)
+
+    def useGraph(self, graphname):
+        self.graphname = graphname
+        self.conn.execute("USE GRAPH " + graphname)
+
+    def useGlobal(self):
+        self.conn.execute("USE GLOBAL")
+        self.graphname = ""
+
+    def getCurrentGraph(self):
+        return self.graphname
+
+    # Schema ===================================================================
+
     def getSchema(self, full=True, force=False) -> dict:
-        """Retrieves the schema of the graph.
+        """Returns the schema of the current graph (can be global graph).
 
         :param bool full:
             If `False`, only metadata of vertices and edges is retrieved, not for other object types, unless those have been fetched previously (with `full=True`).
@@ -456,10 +345,12 @@ class TigerGraphBase(object):
 
         Endpoint:      GET /gsqlserver/gsql/schema
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-the-graph-schema-get-gsql-schema
+
+        TODO: Investigate "/schema" that returns YAML
         """
         if not self.schema or force:
-            self.schema = self._get(self.gsUrl + "/gsqlserver/gsql/schema?graph=" + self.graphname, authMode="pwd")
-            ret = self._get(self.restppUrl + "/graph/" + self.graphname + "/vertices/dummy", resKey="", skipCheck=True)
+            self.schema = self.conn.get("/gsqlserver/gsql/schema?graph=" + self.graphname)
+            ret = self.conn.get("/graph/" + self.graphname + "/vertices/dummy", resKey="", skipCheck=True)
             self.schema["Version"] = ret["version"]["schema"]
         if full:
             if "UDTs" not in self.schema or force:
@@ -481,32 +372,10 @@ class TigerGraphBase(object):
         """
         return self.getSchema(force=force)["Version"]
 
-    def getUDTs(self) -> list:
-        """Returns the list of User Defined Types (names only)."""
-        if "UDTs" not in self.schema:
-            self.getSchema()
-        ret = []
-        for udt in self.schema["UDTs"]:
-            ret.append(udt["name"])
-        return ret
-
-    def getUDT(self, udtName) -> list:
-        """Returns the field details of a specific User Defined Type.
-
-        :param str udtName:
-            The name of the User Defined Type.
-        """
-        if "UDTs" not in self.schema:
-            self.getSchema()
-        for udt in self.schema["UDTs"]:
-            if udt["name"] == udtName:
-                return udt["fields"]
-        return []  # UDT was not found
-
-    # Vertex related functions =================================================
+    # Vertex types =============================================================
 
     def getVertexTypes(self, force=False) -> list:
-        """Returns the list of vertex type names of the graph.
+        """Returns the list of vertex type names of the current graph (can be global graph).
 
         :param bool force:
             If `True`, forces the retrieval the schema details again, otherwise returns a cached copy of vertex type details (if they were already fetched previously).
@@ -518,6 +387,7 @@ class TigerGraphBase(object):
 
     def getVertexType(self, vertexType, force=False) -> dict:
         """Returns the details of the specified vertex type.
+        Works within current graph (can be global graph).
 
         :param str vertexType:
             The name of the vertex type.
@@ -531,6 +401,7 @@ class TigerGraphBase(object):
 
     def getVertexCount(self, vertexType, where="") -> dict:
         """Returns the number of vertices.
+        Works within current graph (can be global graph).
 
         :param str vertexType:
             The name of the vertex type.
@@ -555,10 +426,10 @@ class TigerGraphBase(object):
         if where:
             if vertexType == "*":
                 raise TigerGraphException("VertexType cannot be \"*\" if where condition is specified.", None)
-            res = self._get(self.restppUrl + "/graph/" + self.graphname + "/vertices/" + vertexType + "?count_only=true&filter=" + where)
+            res = self.conn.get("/graph/" + self.graphname + "/vertices/" + vertexType + "?count_only=true&filter=" + where)
         else:
             data = '{"function":"stat_vertex_number","type":"' + vertexType + '"}'
-            res = self._post(self.restppUrl + "/builtins/" + self.graphname, data=data)
+            res = self.conn.post("/builtins/" + self.graphname, data=data)
         if len(res) == 1 and res[0]["v_type"] == vertexType:
             return res[0]["count"]
         ret = {}
@@ -568,6 +439,7 @@ class TigerGraphBase(object):
 
     def getVertexStats(self, vertexTypes, skipNA=False) -> dict:
         """Returns vertex attribute statistics.
+        Works within current graph (can be global graph).
 
         :param str vertexTypes:
             A single vertex type name or a list of vertex types names or '*' for all vertex types.
@@ -588,7 +460,7 @@ class TigerGraphBase(object):
         ret = {}
         for vt in vts:
             data = '{"function":"stat_vertex_attr","type":"' + vt + '"}'
-            res = self._post(self.restppUrl + "/builtins/" + self.graphname, data=data, resKey="", skipCheck=True)
+            res = self.conn.post("/builtins/" + self.graphname, data=data, resKey="", skipCheck=True)
             if res["error"]:
                 if "stat_vertex_attr is skipped" in res["message"]:
                     if not skipNA:
@@ -601,7 +473,21 @@ class TigerGraphBase(object):
                     ret[r["v_type"]] = r["attributes"]
         return ret
 
-    # Edge related functions ===================================================
+    def isTaggable(self, vertexType):
+        pass
+
+    # Indices ==================================================================
+
+    def getIndices(self):
+        pass
+
+    def getVertexTypeIndices(self, vertexType):
+        pass
+
+    def getIndex(self, indexName):
+        pass
+
+    # Edge types ===============================================================
 
     def getEdgeTypes(self, force=False) -> list:
         """Returns the list of edge type names of the graph.
@@ -756,7 +642,7 @@ class TigerGraphBase(object):
         if where or (sourceVertexType and sourceVertexId):
             if not sourceVertexType or not sourceVertexId:
                 raise TigerGraphException("If where condition is specified, then both sourceVertexType and sourceVertexId must be provided too.", None)
-            url = self.restppUrl + "/graph/" + self.graphname + "/edges/" + sourceVertexType + "/" + str(sourceVertexId)
+            url = "/graph/" + self.graphname + "/edges/" + sourceVertexType + "/" + str(sourceVertexId)
             if edgeType:
                 url += "/" + edgeType
                 if targetVertexType:
@@ -766,7 +652,7 @@ class TigerGraphBase(object):
             url += "?count_only=true"
             if where:
                 url += "&filter=" + where
-            res = self._get(url)
+            res = self.conn.get(url)
         else:
             if not edgeType:  # TODO is this a valid check?
                 raise TigerGraphException("A valid edge type or \"*\" must be specified for edge type.", None)
@@ -774,7 +660,7 @@ class TigerGraphBase(object):
                    + (',"from_type":"' + sourceVertexType + '"' if sourceVertexType else '') \
                    + (',"to_type":"' + targetVertexType + '"' if targetVertexType else '') \
                    + '}'
-            res = self._post(self.restppUrl + "/builtins/" + self.graphname, data=data)
+            res = self.conn.post("/builtins/" + self.graphname, data=data)
         if len(res) == 1 and res[0]["e_type"] == edgeType:
             return res[0]["count"]
         ret = {}
@@ -819,7 +705,7 @@ class TigerGraphBase(object):
         ret = {}
         for et in ets:
             data = '{"function":"stat_edge_attr","type":"' + et + '","from_type":"*","to_type":"*"}'
-            res = self._post(self.restppUrl + "/builtins/" + self.graphname, data=data, resKey="", skipCheck=True)
+            res = self.conn.post("/builtins/" + self.graphname, data=data, resKey="", skipCheck=True)
             if res["error"]:
                 if "stat_edge_attr is skiped" in res["message"]:
                     if not skipNA:
@@ -832,26 +718,53 @@ class TigerGraphBase(object):
                     ret[r["e_type"]] = r["attributes"]
         return ret
 
-    # Query related functions ==================================================
+    # User defined types =======================================================
 
-    def getInstalledQueries(self, fmt="py"):
-        """
-        Returns a list of installed queries.
-        
-        :param str fmt:
-            Format of the results:
-            - "py":   Python objects (default)
-            - "json": JSON document
-            - "df":   Pandas DataFrame
-        """
-        ret = self.getEndpoints(dynamic=True)
-        if fmt == "json":
-            return json.dumps(ret)
-        if fmt == "df":
-            return pd.DataFrame(ret).T
+    def getUDTs(self) -> list:
+        """Returns the list of User Defined Types (names only)."""
+        if "UDTs" not in self.schema:
+            self.getSchema()
+        ret = []
+        for udt in self.schema["UDTs"]:
+            ret.append(udt["name"])
         return ret
 
-    # Data sources =================================================
+    def getUDT(self, udtName) -> list:
+        """Returns the field details of a specific User Defined Type.
+
+        :param str udtName:
+            The name of the User Defined Type.
+        """
+        if "UDTs" not in self.schema:
+            self.getSchema()
+        for udt in self.schema["UDTs"]:
+            if udt["name"] == udtName:
+                return udt["fields"]
+        return []  # UDT was not found
+
+    # Queries ==================================================================
+
+    def getInstalledQueries(self):
+        """
+        Returns a list of installed queries.
+        """
+        ret = self.getEndpoints(dynamic=True)
+        return ret
+
+    # TODO What about created but _not_ installed queries?
+
+    def getQuery(self, queryName):
+        pass
+
+    def getRunningQueries(self):
+        # TODO: GET /showprocesslist/{graph_name}
+        #       https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-running-queries-showprocesslist-graph_name
+        pass
+
+    def getQueryStatus(self, queryName):
+        pass
+
+    # Data sources =============================================================
 
     def getDataSources(self, dsType=None):
         """Returns the list of data source names, optionally filtered by type (AWS S3, Kafka)
@@ -874,7 +787,7 @@ class TigerGraphBase(object):
                 return ds
         return {}
 
-    # Loading jobs =================================================
+    # Loading jobs =============================================================
 
     def getLoadingJobs(self) -> list:
         """Returns the list of loading job names of the graph"""
@@ -898,138 +811,52 @@ class TigerGraphBase(object):
                 return lj
         return None
 
-    # Authentication and security ==============================================
+    # Schema change jobs =======================================================
 
-    def getToken(self, secret, setToken=True, lifetime=None) -> tuple:
-        """Requests an authorization token.
+    def getSchemaChangeJobs(self):
+        pass
 
-        :param str secret:
-            The secret (string) generated in GSQL using `CREATE SECRET`.
-            See https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#managing-credentials
-        :param bool setToken:
-            Set the connection's API token to the new value (default: true).
-        :param int lifetime:
-            Duration of token validity (in secs, default 30 days = 2,592,000 secs).
+    def getSchemaChangeJob(self, jobName):
+        pass
 
-        This function returns a token only if REST++ authentication is enabled. If not, an exception will be raised.
-        See: https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#rest-authentication
+    # Users ====================================================================
 
-        Returns a tuple of (<new_token>, <exporation_timestamp_unixtime>, <expiration_timestamp_ISO8601>).
-                 Return value can be ignored.
+    def getUsers(self):
+        pass
 
-        Note: expiration timestamp's time zone might be different from your computer's local time zone.
+    def getUser(self, userName):
+        pass
 
-        Endpoint:      GET /requesttoken
-        Documentation: https://docs.tigergraph.com/dev/restpp-api/restpp-requests#requesting-a-token-with-get-requesttoken
-        """
-        res = json.loads(requests.request("GET", self.restppUrl + "/requesttoken?secret=" + secret + ("&lifetime=" + str(lifetime) if lifetime else "")).text)
-        if not res["error"]:
-            if setToken:
-                self.apiToken = res["token"]
-                self.authHeader = {'Authorization': "Bearer " + self.apiToken}
-            return res["token"], res["expiration"], datetime.utcfromtimestamp(res["expiration"]).strftime('%Y-%m-%d %H:%M:%S')
-        if "Endpoint is not found from url = /requesttoken" in res["message"]:
-            raise TigerGraphException("REST++ authentication is not enabled, can't generate token.", None)
-        raise TigerGraphException(res["message"], (res["code"] if "code" in res else None))
+    # Proxy groups =============================================================
 
-    def refreshToken(self, secret, token=None, lifetime=2592000) -> tuple:
-        """Extends a token's lifetime.
+    def getGroups(self):
+        pass
 
-        :param str secret:
-            The secret (string) generated in GSQL using `CREATE SECRET`.
-            See https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#managing-credentials
-        :param str token:
-            The token requested earlier. If not specified, refreshes current connection's token.
-        :param int lifetime:
-            Duration of token validity (in secs, default 30 days = 2,592,000 secs) from current system timestamp.
+    def getGroup(self, groupName):
+        pass
 
-        This function works only if REST++ authentication is enabled. If not, an exception will be raised.
-        See: https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#rest-authentication
+    # Secrets and tokens =======================================================
 
-        Returns a tuple of (<token>, <exporation_timestamp_unixtime>, <expiration_timestamp_ISO8601>).
-                 Return value can be ignored.
-                 Raises exception if specified token does not exists.
+    def getSecrets(self):
+        # ⚠️ Consider security implications
+        pass
 
-        Note:
-        - New expiration timestamp will be `now + lifetime` seconds, _not_ `current expiration timestamp + lifetime` seconds.
-        - Expiration timestamp's time zone might be different from your computer's local time zone.
+    def getTokens(self, secret):
+        # ⚠️ Consider security implications
+        pass
 
-        Endpoint:      PUT /requesttoken
-        Documentation: https://docs.tigergraph.com/dev/restpp-api/restpp-requests#refreshing-tokens
-        """
-        if not token:
-            token = self.apiToken
-        res = json.loads(requests.request("PUT", self.restppUrl + "/requesttoken?secret=" + secret + "&token=" + token + ("&lifetime=" + str(lifetime) if lifetime else "")).text)
-        if not res["error"]:
-            exp = time.time() + res["expiration"]
-            return res["token"], int(exp), datetime.utcfromtimestamp(exp).strftime('%Y-%m-%d %H:%M:%S')
-        if "Endpoint is not found from url = /requesttoken" in res["message"]:
-            raise TigerGraphException("REST++ authentication is not enabled, can't refresh token.", None)
-        raise TigerGraphException(res["message"], (res["code"] if "code" in res else None))
+    # Tags =====================================================================
+    def getTags(self):
+        pass
 
-    def deleteToken(self, secret, token=None, skipNA=True) -> bool:
-        """Deletes a token.
-
-        :param str secret:
-            The secret (string) generated in GSQL using `CREATE SECRET`.
-            See https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#managing-credentials
-        :param str token:
-            The token requested earlier. If not specified, deletes current connection's token, so be careful.
-        :param bool skipNA:
-            Don't raise exception if specified token does not exist.
-
-        This function works only if REST++ authentication is enabled. If not, an exception will be raised.
-        See: https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#rest-authentication
-
-        Returns `True` if deletion was successful or token did not exist but `skipNA` was `True`; raises exception otherwise.
-
-        Endpoint:      DELETE /requesttoken
-        Documentation: https://docs.tigergraph.com/dev/restpp-api/restpp-requests#deleting-tokens
-        """
-        if not token:
-            token = self.apiToken
-        res = json.loads(requests.request("DELETE", self.restppUrl + "/requesttoken?secret=" + secret + "&token=" + token).text)
-        if not res["error"]:
-            return True
-        if res["code"] == "REST-3300" and skipNA:
-            return True
-        if "Endpoint is not found from url = /requesttoken" in res["message"]:
-            raise TigerGraphException("REST++ authentication is not enabled, can't delete token.", None)
-        raise TigerGraphException(res["message"], (res["code"] if "code" in res else None))
-
-    def createSecret(self, alias="") -> str:
-        """Issues a `CREATE SECRET` GSQL statement and returns the secret generated by that statement.
-
-        :param str alias:
-            The alias for the secret.
-        """
-        response = self.gsql.execute("CREATE SECRET " + alias)
-        try:
-            secret = re.search(r'The secret: (\w*)', response.replace('\n', ''))[1]
-            return secret
-        except re.error:
-            return None
-
-    # TODO: showSecret()
-
-    # Other functions ==========================================================
-
-    def echo(self):
-        """Pings the database.
-
-        Expected return value is "Hello GSQL"
-
-        Endpoint:      GET /echo  and  POST /echo
-        Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-echo-and-post-echo
-        """
-        return self._get(self.restppUrl + "/echo/" + self.graphname, resKey="message")
+    # REST++ endpoints =========================================================
 
     def getEndpoints(self, builtin=False, dynamic=False, static=False) -> dict:
         """Lists the REST++ endpoints and their parameters.
 
         :param bool builtin:
             List TigerGraph provided REST++ endpoints.
-        :param bool dymamic:
+        :param bool dynamic:
             List endpoints generated for user installed queries.
         :param bool static:
             List static endpoints.
@@ -1046,26 +873,38 @@ class TigerGraphBase(object):
             bui = builtin
             dyn = dynamic
             sta = static
-        url = self.restppUrl + "/endpoints/" + self.graphname + "?"
+        url = "/endpoints/" + self.graphname + "?"
         if bui:
             eps = {}
-            res = self._get(url + "builtin=true", resKey="")
+            res = self.conn.get(url + "builtin=true", resKey="")
             for ep in res:
                 if not re.search(r" /graph/", ep) or re.search(r" /graph/{graph_name}/", ep):
                     eps[ep] = res[ep]
             ret.update(eps)
         if dyn:
             eps = {}
-            res = self._get(url + "dynamic=true", resKey="")
+            res = self.conn.get(url + "dynamic=true", resKey="")
             for ep in res:
                 if re.search(r"^GET /query/" + self.graphname, ep):
                     eps[ep] = res[ep]
             ret.update(eps)
         if sta:
-            ret.update(self._get(url + "static=true", resKey=""))
+            ret.update(self.conn.get(url + "static=true", resKey=""))
         return ret
 
-    def getStatistics(self, seconds=10, segment=10) -> dict:
+    # Other functions ==========================================================
+
+    def echo(self):
+        """Pings the database.
+
+        Expected return value is "Hello GSQL"
+
+        Endpoint:      GET /echo  and  POST /echo
+        Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-echo-and-post-echo
+        """
+        return self.conn.get("/echo/" + self.graphname, resKey="message")
+
+    def getStatistics(self, seconds=10, segments=10) -> dict:
         """Retrieves real-time query performance statistics over the given time period.
 
         :param int seconds:
@@ -1082,24 +921,23 @@ class TigerGraphBase(object):
             seconds = 10
         else:
             seconds = max(min(seconds, 0), 60)
-        if not segment or type(segment) != "int":
+        if not segments or type(segments) != "int":
             segment = 10
         else:
-            segment = max(min(segment, 0), 100)
-        return self._get(self.restppUrl + "/statistics/" + self.graphname + "?seconds=" + str(seconds) + "&segment=" + str(segment), resKey="")
+            segment = max(min(segments, 0), 100)
+        return self.conn.get("/statistics/" + self.graphname + "?seconds=" + str(seconds) + "&segment=" + str(segment), resKey="")
 
-    def getVersion(self, raw=False) -> str | list:
-        """Retrieves the git versions of all components of the system.
+    def getVersion(self, raw=False) -> [str, list]:
+        """Retrieves the Git versions of all components of the system.
 
         :param bool raw:
-            If `True`, returns the unprocssed (not quite JSON) response. Return nice list of components and their version number otherwise.
+            If `True`, returns the unprocessed (not quite JSON) response. Return nice list of components and their version number otherwise.
 
         Endpoint:      GET /version
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-version
         """
-        response = requests.request("GET", self.restppUrl + "/version/" + self.graphname, headers=self.authHeader)
+        response = requests.request("GET", "/version/" + self.graphname, headers=self.conn.authHeader)
         res = json.loads(response.text, strict=False)  # "strict=False" is why _get() was not used
-        self._errorCheck(res)
 
         if raw:
             return response.text
@@ -1118,7 +956,7 @@ class TigerGraphBase(object):
         :param str component:
             One of TigerGraph's components (e.g. product, gpe, gse).
         :param bool full:
-            If `True`, retuns the full build version string, instead of just the X.Y.Z version number,
+            If `True`, returns the full build version string, instead of just the X.Y.Z version number,
 
         Get the full list of components using `getVersion`.
         """
@@ -1136,7 +974,7 @@ class TigerGraphBase(object):
 
     def getEdition(self) -> str:
         """Gets the database edition information"""
-        ret = self._get(self.restppUrl + "/graph/" + self.graphname + "/vertices/dummy", resKey="", skipCheck=True)
+        ret = self.conn.get("/graph/" + self.graphname + "/vertices/dummy", resKey="", skipCheck=True)
         return ret["version"]["edition"]
 
     def getLicenseInfo(self) -> dict:
@@ -1144,7 +982,7 @@ class TigerGraphBase(object):
 
         In case of evaluation/trial deployment, an information message and -1 remaining days are returned.
         """
-        res = self._get(self.restppUrl + "/showlicenseinfo", resKey="", skipCheck=True)
+        res = self.conn.get("/showlicenseinfo", resKey="", skipCheck=True)
         ret = {}
         if not res["error"]:
             ret["message"] = res["message"]

@@ -9,31 +9,44 @@ from pyTigerGraph import TigerGraphBase, TigerGraphException
 class TigerGraphConnection(TigerGraphBase):
     """Python wrapper for TigerGraph's REST++ and GSQL APIs, mostly for analytics/data science."""
 
-    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9000", gsPort="14240", apiToken="", gsqlVersion="", tgDir="", useCert=False, certPath=""):
+    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9000", gsPort="14240", apiToken="", gsqlVersion="", tgPath="", useCert=False, certPath="", debug=False):
         """Initiate a connection object.
 
-        Arguments
-        - `host`:              The IP address or hostname of the TigerGraph server, including the scheme (`http` or `https`).
-        - `graphname`:         The default graph for running queries.
-        - `username`:          The username on the TigerGraph server.
-        - `password`:          The password for that user.
-        - `restppPort`:        The post for REST++ queries.
-        - `gsPort`:            The port of all other queries.
-        - `apiToken`:          A token to use when making queries. Ignored if REST++ authentication is not enabled.
-        - `gsqlVersion`:       The version of GSQL client to be used. Default to database version.
-                               pyTigerGraph can detect the version from the database, but in rare cases (when the changes/fixes do not impact
-                               the GSQL functionality) no new GSQL version is released
-                               when a new version of the database is shipper. In these cases an appropriate GSQL client version needs to be
-                               manually specified (typically the latest available version lesser than the database version).
-                               You can check the list of available GSQL clients at https://bintray.com/tigergraphecosys/tgjars/gsql_client
-        - `gsqlPath`:          The folder/directory where the GSQL client JAR(s) will be stored
-        - `useCert`:           True if you need to use a certificate because the server is secure (such as on TigerGraph
+        :param str host:
+            The IP address or hostname of the TigerGraph server, including the scheme (`http` or `https`).
+        :param str graphname:
+            The name of the graph.
+        :param str username:
+            The username on the TigerGraph server.
+        :param str password:
+            The password for that user.
+        :param str restppPort:
+            The port for REST++ queries.
+        :param str gsPort:
+            The port of all other queries (GSQL server).
+        :param str gsPort:
+            The port of all other queries (GSQL server).
+        :param str apiToken:
+            A token to use when making queries. Ignored if REST++ authentication is not enabled.
+        :param str gsqlVersion:
+            The version of GSQL client to be used. Default to database version.
+            pyTigerGraph can detect the version from the database, but in rare cases (when the changes/fixes do not impact the GSQL functionality) no new GSQL version is released
+            when a new version of the database is shipper. In these cases an appropriate GSQL client version needs to be manually specified (typically the latest available version
+            lesser than the database version).
+            You can check the list of available GSQL clients at https://bintray.com/tigergraphecosys/tgjars/gsql_client
+        :param str tgPath:
+            The directory where TigerGraph related configuration and certification files and downloaded executables are stored. Default is "~/.tigergraph"
+        :param bool useCert:
+            True if you need to use a certificate because the server is secure (such as on TigerGraph
                                Cloud). This needs to be False when connecting to an unsecure server such as a TigerGraph Developer instance.
                                When True the certificate would be downloaded when it is first needed.
-        - `certPath`:          The folder/directory _and_ the name of the SSL certification file where the certification should be stored.
+        :param str certPath:
+            The folder/directory _and_ the name of the SSL certification file where the certification should be stored.
+        :param bool debug:
+            Enables debug output.
         """
 
-        super().__init__(host, graphname, username, password, restppPort, gsPort, apiToken, gsqlVersion, tgDir, useCert, certPath)
+        super().__init__(host, graphname, username, password, restppPort, gsPort, apiToken, gsqlVersion, tgPath, useCert, certPath, debug)
 
     # Generic DML functions ====================================================
 
@@ -60,7 +73,7 @@ class TigerGraphConnection(TigerGraphBase):
             data = json.dumps(data)
         if self.debug:
             print(data)
-        return self._post(self.restppUrl + "/graph/" + self.graphname, data=data)[0]
+        return self.conn.post("/graph/" + self.graphname, data=data)[0]
 
     # Vertex related functions =================================================
 
@@ -88,7 +101,7 @@ class TigerGraphConnection(TigerGraphBase):
             return None
         vals = self._upsertAttrs(attributes)
         data = json.dumps({"vertices": {vertexType: {vertexId: vals}}})
-        return self._post(self.restppUrl + "/graph/" + self.graphname, data=data)[0]["accepted_vertices"]
+        return self.conn.post("/graph/" + self.graphname, data=data)[0]["accepted_vertices"]
 
     def upsertVertices(self, vertexType, vertices):
         """Upserts multiple vertices (of the same type).
@@ -121,7 +134,7 @@ class TigerGraphConnection(TigerGraphBase):
             vals = self._upsertAttrs(v[1])
             data[v[0]] = vals
         data = json.dumps({"vertices": {vertexType: data}})
-        return self._post(self.restppUrl + "/graph/" + self.graphname, data=data)[0]["accepted_vertices"]
+        return self.conn.post("/graph/" + self.graphname, data=data)[0]["accepted_vertices"]
 
     def getVertices(self, vertexType, select="", where="", limit="", sort="", fmt="py", withId=True, withType=False, timeout=0):
         """Retrieves vertices of the given vertex type.
@@ -150,7 +163,7 @@ class TigerGraphConnection(TigerGraphBase):
         Endpoint:      GET /graph/{graph_name}/vertices
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-graph-graph_name-vertices
         """
-        url = self.restppUrl + "/graph/" + self.graphname + "/vertices/" + vertexType
+        url = "/graph/" + self.graphname + "/vertices/" + vertexType
         isFirst = True
         if select:
             url += "?select=" + select
@@ -167,7 +180,7 @@ class TigerGraphConnection(TigerGraphBase):
         if timeout and timeout > 0:
             url += ("?" if isFirst else "&") + "timeout=" + str(timeout)
 
-        ret = self._get(url)
+        ret = self.conn.get(url)
 
         if fmt == "json":
             return json.dumps(ret)
@@ -207,11 +220,11 @@ class TigerGraphConnection(TigerGraphBase):
             return None  # TODO: a better return value?
         else:
             vids = vertexIds
-        url = self.restppUrl + "/graph/" + self.graphname + "/vertices/" + vertexType + "/"
+        url = "/graph/" + self.graphname + "/vertices/" + vertexType + "/"
 
         ret = []
         for vid in vids:
-            ret += self._get(url + str(vid))
+            ret += self.conn.get(url + str(vid))
 
         if fmt == "json":
             return json.dumps(ret)
@@ -250,7 +263,7 @@ class TigerGraphConnection(TigerGraphBase):
         Endpoint:      DELETE /graph/{graph_name}/vertices
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#delete-graph-graph_name-vertices
         """
-        url = self.restppUrl + "/graph/" + self.graphname + "/vertices/" + vertexType
+        url = "/graph/" + self.graphname + "/vertices/" + vertexType
         isFirst = True
         if where:
             url += "?filter=" + where
@@ -263,7 +276,7 @@ class TigerGraphConnection(TigerGraphBase):
             isFirst = False
         if timeout and timeout > 0:
             url += ("?" if isFirst else "&") + "timeout=" + str(timeout)
-        return self._delete(url)["deleted_vertices"]
+        return self.conn.delete(url)["deleted_vertices"]
 
     def delVerticesById(self, vertexType, vertexIds, permanent=False, timeout=0):
         """Deletes vertices from graph identified by their ID.
@@ -287,7 +300,7 @@ class TigerGraphConnection(TigerGraphBase):
             return None  # TODO: a better return value?
         else:
             vids = vertexIds
-        url1 = self.restppUrl + "/graph/" + self.graphname + "/vertices/" + vertexType + "/"
+        url1 = "/graph/" + self.graphname + "/vertices/" + vertexType + "/"
         url2 = ""
         if permanent:
             url2 = "?permanent=true"
@@ -295,7 +308,7 @@ class TigerGraphConnection(TigerGraphBase):
             url2 += ("&" if url2 else "?") + "timeout=" + str(timeout)
         ret = 0
         for vid in vids:
-            ret += self._delete(url1 + str(vid) + url2)["deleted_vertices"]
+            ret += self.conn.delete(url1 + str(vid) + url2)["deleted_vertices"]
         return ret
 
     # Edge related functions ===================================================
@@ -329,7 +342,7 @@ class TigerGraphConnection(TigerGraphBase):
             return None
         vals = self._upsertAttrs(attributes)
         data = json.dumps({"edges": {sourceVertexType: {sourceVertexId: {edgeType: {targetVertexType: {targetVertexId: vals}}}}}})
-        return self._post(self.restppUrl + "/graph/" + self.graphname, data=data)[0]["accepted_edges"]
+        return self.conn.post("/graph/" + self.graphname, data=data)[0]["accepted_edges"]
 
     def upsertEdges(self, sourceVertexType, edgeType, targetVertexType, edges):
         """Upserts multiple edges (of the same type).
@@ -379,7 +392,7 @@ class TigerGraphConnection(TigerGraphBase):
             # targetVertexId
             l4[e[1]] = vals
         data = json.dumps({"edges": data})
-        return self._post(self.restppUrl + "/graph/" + self.graphname, data=data)[0]["accepted_edges"]
+        return self.conn.post("/graph/" + self.graphname, data=data)[0]["accepted_edges"]
 
     def getEdges(self, sourceVertexType, sourceVertexId, edgeType=None, targetVertexType=None, targetVertexId=None, select="", where="", limit="", sort="", fmt="py", withId=True, withType=False, timeout=0):
         """Retrieves edges of the given edge type originating from a specific source vertex.
@@ -412,7 +425,7 @@ class TigerGraphConnection(TigerGraphBase):
         # TODO: change sourceVertexId to sourceVertexIds and allow passing both number and list as parameter
         if not sourceVertexType or not sourceVertexId:
             raise TigerGraphException("Both source vertex type and source vertex ID must be provided.", None)
-        url = self.restppUrl + "/graph/" + self.graphname + "/edges/" + sourceVertexType + "/" + str(sourceVertexId)
+        url = "/graph/" + self.graphname + "/edges/" + sourceVertexType + "/" + str(sourceVertexId)
         if edgeType:
             url += "/" + edgeType
             if targetVertexType:
@@ -434,7 +447,7 @@ class TigerGraphConnection(TigerGraphBase):
             isFirst = False
         if timeout and timeout > 0:
             url += ("?" if isFirst else "&") + "timeout=" + str(timeout)
-        ret = self._get(url)
+        ret = self.conn.get(url)
 
         if fmt == "json":
             return json.dumps(ret)
@@ -468,18 +481,20 @@ class TigerGraphConnection(TigerGraphBase):
             return []
 
         # Check if ttk_getEdgesFrom query was installed
-        if self.ttkGetEF is None:
-            self.ttkGetEF = False
-            eps = self.getEndpoints(dynamic=True)
-            for ep in eps:
-                if ep.endswith("ttk_getEdgesFrom"):
-                    self.ttkGetEF = True
+        # if self.ttkGetEF is None:
+        #     self.ttkGetEF = False
+        #     eps = self.getEndpoints(dynamic=True)
+        #     for ep in eps:
+        #         if ep.endswith("ttk_getEdgesFrom"):
+        #             self.ttkGetEF = True
 
         sourceVertexType = self.getEdgeSourceVertexType(edgeType)
         if isinstance(sourceVertexType, set) or sourceVertexType == "*":  # TODO: support edges with multiple source vertex types
             raise TigerGraphException("Edges with multiple source vertex types are not currently supported.", None)
 
-        if self.ttkGetEF:  # If installed version is available, use it, as it can return edge attributes too.
+        # TODO: Rethink how it should be handled. Require query to be installed? 
+        # Do we have to worry about 2.x at all?
+        if False:  # self.ttkGetEF:  # If installed version is available, use it, as it can return edge attributes too.
             ret = self.runInstalledQuery("ttk_getEdgesFrom", {"edgeType": edgeType, "sourceVertexType": sourceVertexType})
         else:  # If installed version is not available, use interpreted version. Always available, but couldn't return attributes before v3.0.
             queryText = \
@@ -496,7 +511,7 @@ class TigerGraphConnection(TigerGraphBase):
              }'
 
             queryText = queryText.replace("$graph",          self.graphname) \
-                                 .replace('$sourceEdgeType', sourceVertexType) \
+                                 .replace('$sourceEdgeType', sourceVertexType[0]) \
                                  .replace('$edgeType',       edgeType)
             ret = self.runInterpretedQuery(queryText)
         ret = ret[0]["edges"]
@@ -533,7 +548,7 @@ class TigerGraphConnection(TigerGraphBase):
         """
         if not sourceVertexType or not sourceVertexId:
             raise TigerGraphException("Both sourceVertexType and sourceVertexId must be provided.", None)
-        url = self.restppUrl + "/graph/" + self.graphname + "/edges/" + sourceVertexType + "/" + str(sourceVertexId)
+        url = "/graph/" + self.graphname + "/edges/" + sourceVertexType + "/" + str(sourceVertexId)
         if edgeType:
             url += "/" + edgeType
             if targetVertexType:
@@ -549,7 +564,7 @@ class TigerGraphConnection(TigerGraphBase):
             isFirst = False
         if timeout and timeout > 0:
             url += ("?" if isFirst else "&") + "timeout=" + str(timeout)
-        res = self._delete(url)
+        res = self.conn.delete(url)
         ret = {}
         for r in res:
             ret[r["e_type"]] = r["deleted_edges"]
@@ -586,7 +601,7 @@ class TigerGraphConnection(TigerGraphBase):
             headers["GSQL-TIMEOUT"] = str(timeout)
         if sizeLimit:
             headers["RESPONSE-LIMIT"] = str(sizeLimit)
-        return self._get(self.restppUrl + "/query/" + self.graphname + "/" + queryName + "?" + query1, headers=headers)
+        return self.conn.get("/query/" + self.graphname + "/" + queryName + "?" + query1, headers=headers)
 
     def runInterpretedQuery(self, queryText, params=None, timeout=None, sizeLimit=None):
         """Runs an interpreted query.
@@ -620,7 +635,7 @@ class TigerGraphConnection(TigerGraphBase):
             headers["GSQL-TIMEOUT"] = str(timeout)
         if sizeLimit:
             headers["RESPONSE-LIMIT"] = str(sizeLimit)
-        return self._post(self.gsUrl + "/gsqlserver/interpreted_query", data=queryText, params=params, authMode="pwd", headers=headers)
+        return self.conn.post("/gsqlserver/interpreted_query", data=queryText, params=params, authMode="pwd", headers=headers)
 
     # TODO: GET /showprocesslist/{graph_name}
     #       https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-running-queries-showprocesslist-graph_name
@@ -821,7 +836,7 @@ class TigerGraphConnection(TigerGraphBase):
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#post-shortestpath-graphname-shortest-path-search
         """
         data = self._preparePathParams(sourceVertices, targetVertices, maxLength, vertexFilters, edgeFilters, allShortestPaths)
-        return self._post(self.restppUrl + "/shortestpath/" + self.graphname, data=data)
+        return self.conn.post("/shortestpath/" + self.graphname, data=data)
 
     def allPaths(self, sourceVertices, targetVertices, maxLength, vertexFilters=None, edgeFilters=None):
         """Find all possible paths up to a given maximum path length between the source and target vertex sets.
@@ -839,7 +854,7 @@ class TigerGraphConnection(TigerGraphBase):
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#post-allpaths-graphname-all-paths-search
         """
         data = self._preparePathParams(sourceVertices, targetVertices, maxLength, vertexFilters, edgeFilters)
-        return self._post(self.restppUrl + "/allpaths/" + self.graphname, data=data)
+        return self.conn.post("/allpaths/" + self.graphname, data=data)
 
     # Pandas DataFrame support =================================================
 

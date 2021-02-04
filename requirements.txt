@@ -1,0 +1,5 @@
+pyTigerGraph~=0.0.9.6.3
+pandas~=1.0.5
+setuptools~=41.2.0
+requests~=2.23.0
+pyTigerDriver~=1.0.8

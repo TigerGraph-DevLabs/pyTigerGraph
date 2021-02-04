@@ -10,7 +10,7 @@ if __name__ == '__main__':
 
 import json
 import pandas as pd
-from .context import pyTigerGraph as tg
+from .pyTigerGraphBase import TigerGraphBase as tg
 
 sep = "-" * 60
 
@@ -29,7 +29,7 @@ def pr(fn, res):
 
 print("Start\n" + ("-"*100))
 
-conn = tg.TigerGraphBase(host="http://127.0.0.1", restppPort="30900", gsPort="30240", graphname="test")
+conn = tg(host="http://127.0.0.1", restppPort="30900", gsPort="30240", graphname="FraudGraph", debug=True)
 # conn2 = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="26900", gsPort="26240", graphname="FraudGraph",     username="tigergraph", password="tigergraph", apiToken="el1op7a9eqrlq4ape5t452lukv991k7h")
 # conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="25900", gsPort="25240", graphname="g2",             username="tigergraph", password="szilard",    apiToken="kc93as8gdaqcbjvl30o8jvv5flufmtvn")
 # conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort=25900,   gsPort=25240,   graphname="cre_evaluation", username="tigergraph", password="tigergraph", apiToken="2aa016d747ede9gg6da4drslm98srfoj")
@@ -75,7 +75,7 @@ conn.debug = True
 # Schema related functions =====================================================
 
 # Get schema metadata
-# pr("getSchema()", conn.getSchema())
+pr("getSchema()", conn.getSchema())
 # pr("getSchema()", conn.getSchema(False))
 # pr("getSchema()", conn.getSchema(udts=False))
 # pr("getSchemaVersion()", conn.getSchemaVersion())
