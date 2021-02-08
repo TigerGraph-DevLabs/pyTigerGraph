@@ -5,10 +5,12 @@ class TigerGraphException(Exception):
     """
 
     def __init__(self, message: str, code: [int, str] = None):
-        """
+        """Generic TigerGraph specific exception.
 
-        :param code:
+        Where possible, error message and code returned by TigerGraph will be used.
 
+        :param str message:
+        :param int|str code:
         """
         self.message = message
         self.code = code

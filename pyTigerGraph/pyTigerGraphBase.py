@@ -3,18 +3,10 @@ import re
 
 import requests
 
-from .pyTigerDriver import TigerDriver as td
+from pyTigerDriver import TigerDriver as td
+from pyTigerGraphException import TigerGraphException
 
-
-class TigerGraphException(Exception):
-    """Generic TigerGraph specific exception.
-
-    Where possible, error message and code returned by TigerGraph will be used.
-    """
-
-    def __init__(self, message, code=None):
-        self.message = message
-        self.code = code
+GLOBAL = "GLOBAL"
 
 
 class TigerGraphBase(object):
@@ -57,10 +49,10 @@ class TigerGraphBase(object):
             Enables debug output.
         """
 
-        self.conn = td(host, graphname, username, password,  restppPort, gsPort, apiToken, gsqlVersion, tgPath, useCert, certPath, debug)
+        self.conn = td(host, graphname, username, password, restppPort, gsPort, apiToken, gsqlVersion, tgPath, useCert, certPath, debug)
 
         self.debug = debug
-        self.graphname = graphname  # Current graph
+        self.graphName = graphname  # Current graph
         self.schema = None
         self.graphs = []  # TODO This should probably replace .schema (so that metadata for multiple graphs could be kept)
 
@@ -76,7 +68,7 @@ class TigerGraphBase(object):
 
         res = self.conn.execute('ls')
 
-        for objType in ["VertexTypes", "EdgeTypes", "Indexes", "Queries", "LoadingJobs", "DataSources", "Graphs"]: # TODO Remove "graph"
+        for objType in ["VertexTypes", "EdgeTypes", "Indexes", "Queries", "LoadingJobs", "DataSources", "Graphs"]:  # TODO Remove "graph"
             if objType not in self.schema:
                 self.schema[objType] = []
 
@@ -189,7 +181,7 @@ class TigerGraphBase(object):
                     dsDetails = line[4:].split()
                     ds = {"Name": dsDetails[1], "Type": dsDetails[0], "Details": dsDetails[2], "Statement": [
                         "CREATE DATA_SOURCE " + dsDetails[0].upper() + " " + dsDetails[1] + ' = "' + dsDetails[2].lstrip("(").rstrip(")").replace('"', "'") + '"',
-                        "GRANT DATA_SOURCE " + dsDetails[1] + " TO GRAPH " + self.graphname
+                        "GRANT DATA_SOURCE " + dsDetails[1] + " TO GRAPH " + self.graphName
                     ]}
                     self.schema["DataSources"].append(ds)
                     i = i + 1
@@ -212,7 +204,7 @@ class TigerGraphBase(object):
         Endpoint:      GET /gsqlserver/gsql/udtlist
         Documentation: Not documented publicly
         """
-        res = self.conn.get("/gsqlserver/gsql/udtlist?graph=" + self.graphname)
+        res = self.conn.get("/gsqlserver/gsql/udtlist?graph=" + self.graphName)
         for u in res:
             u["Name"] = u["name"]
             u.pop("name")
@@ -271,7 +263,7 @@ class TigerGraphBase(object):
                     i += 1
                     line = res[i]
                     while line != "":
-                        if "- GraphName: " + self.graphname in line:
+                        if "- GraphName: " + self.graphName in line:
                             i += 1
                             line = res[i]
                             roles = line[line.find(":") + 2:].split(", ")
@@ -296,7 +288,7 @@ class TigerGraphBase(object):
                 i += 1
                 line = res[i]
                 while line != "":
-                    if "- GraphName: " + self.graphname in line:
+                    if "- GraphName: " + self.graphName in line:
                         i += 1
                         line = res[i]
                         roles = line[line.find(":") + 2:].split(", ")
@@ -322,16 +314,35 @@ class TigerGraphBase(object):
         # TODO: Make it capable to return the schema of any graphs?
         return self.getSchema(full, force)
 
-    def useGraph(self, graphname):
-        self.graphname = graphname
+    def useGraph(self, graphname: str):
+        """Selects a graph to be used as working graph.
+
+        Documentation: https://docs.tigergraph.com/dev/gsql-ref/ddl-and-loading/defining-a-graph-schema#use-graph
+
+        :param str graphname:
+            The name of the graph.
+        """
         self.conn.execute("USE GRAPH " + graphname)
+        return self.getCurrentGraph()
 
     def useGlobal(self):
-        self.conn.execute("USE GLOBAL")
-        self.graphname = ""
+        """Selects the global graph to be used as working graph.
 
+        Documentation: https://docs.tigergraph.com/dev/gsql-ref/ddl-and-loading/defining-a-graph-schema#use-graph
+        """
+        self.conn.execute("USE GLOBAL")
+        return self.getCurrentGraph()
+
+    # def useGraph(self, graphname):
+    #     self.graphname = graphname
+    #     self.conn.execute("USE GRAPH " + graphname)
+    #
+    # def useGlobal(self):
+    #     self.conn.execute("USE GLOBAL")
+    #     self.graphname = ""
+    #
     def getCurrentGraph(self):
-        return self.graphname
+        return self.graphName
 
     # Schema ===================================================================
 
@@ -349,8 +360,8 @@ class TigerGraphBase(object):
         TODO: Investigate "/schema" that returns YAML
         """
         if not self.schema or force:
-            self.schema = self.conn.get("/gsqlserver/gsql/schema?graph=" + self.graphname)
-            ret = self.conn.get("/graph/" + self.graphname + "/vertices/dummy", resKey="", skipCheck=True)
+            self.schema = self.conn.get("/gsqlserver/gsql/schema?graph=" + self.graphName)
+            ret = self.conn.get("/graph/" + self.graphName + "/vertices/dummy", resKey="", skipCheck=True)
             self.schema["Version"] = ret["version"]["schema"]
         if full:
             if "UDTs" not in self.schema or force:
@@ -426,10 +437,10 @@ class TigerGraphBase(object):
         if where:
             if vertexType == "*":
                 raise TigerGraphException("VertexType cannot be \"*\" if where condition is specified.", None)
-            res = self.conn.get("/graph/" + self.graphname + "/vertices/" + vertexType + "?count_only=true&filter=" + where)
+            res = self.conn.get("/graph/" + self.graphName + "/vertices/" + vertexType + "?count_only=true&filter=" + where)
         else:
             data = '{"function":"stat_vertex_number","type":"' + vertexType + '"}'
-            res = self.conn.post("/builtins/" + self.graphname, data=data)
+            res = self.conn.post("/builtins/" + self.graphName, data=data)
         if len(res) == 1 and res[0]["v_type"] == vertexType:
             return res[0]["count"]
         ret = {}
@@ -460,7 +471,7 @@ class TigerGraphBase(object):
         ret = {}
         for vt in vts:
             data = '{"function":"stat_vertex_attr","type":"' + vt + '"}'
-            res = self.conn.post("/builtins/" + self.graphname, data=data, resKey="", skipCheck=True)
+            res = self.conn.post("/builtins/" + self.graphName, data=data, resKey="", skipCheck=True)
             if res["error"]:
                 if "stat_vertex_attr is skipped" in res["message"]:
                     if not skipNA:
@@ -642,7 +653,7 @@ class TigerGraphBase(object):
         if where or (sourceVertexType and sourceVertexId):
             if not sourceVertexType or not sourceVertexId:
                 raise TigerGraphException("If where condition is specified, then both sourceVertexType and sourceVertexId must be provided too.", None)
-            url = "/graph/" + self.graphname + "/edges/" + sourceVertexType + "/" + str(sourceVertexId)
+            url = "/graph/" + self.graphName + "/edges/" + sourceVertexType + "/" + str(sourceVertexId)
             if edgeType:
                 url += "/" + edgeType
                 if targetVertexType:
@@ -660,7 +671,7 @@ class TigerGraphBase(object):
                    + (',"from_type":"' + sourceVertexType + '"' if sourceVertexType else '') \
                    + (',"to_type":"' + targetVertexType + '"' if targetVertexType else '') \
                    + '}'
-            res = self.conn.post("/builtins/" + self.graphname, data=data)
+            res = self.conn.post("/builtins/" + self.graphName, data=data)
         if len(res) == 1 and res[0]["e_type"] == edgeType:
             return res[0]["count"]
         ret = {}
@@ -705,7 +716,7 @@ class TigerGraphBase(object):
         ret = {}
         for et in ets:
             data = '{"function":"stat_edge_attr","type":"' + et + '","from_type":"*","to_type":"*"}'
-            res = self.conn.post("/builtins/" + self.graphname, data=data, resKey="", skipCheck=True)
+            res = self.conn.post("/builtins/" + self.graphName, data=data, resKey="", skipCheck=True)
             if res["error"]:
                 if "stat_edge_attr is skiped" in res["message"]:
                     if not skipNA:
@@ -873,7 +884,7 @@ class TigerGraphBase(object):
             bui = builtin
             dyn = dynamic
             sta = static
-        url = "/endpoints/" + self.graphname + "?"
+        url = "/endpoints/" + self.graphName + "?"
         if bui:
             eps = {}
             res = self.conn.get(url + "builtin=true", resKey="")
@@ -885,7 +896,7 @@ class TigerGraphBase(object):
             eps = {}
             res = self.conn.get(url + "dynamic=true", resKey="")
             for ep in res:
-                if re.search(r"^GET /query/" + self.graphname, ep):
+                if re.search(r"^GET /query/" + self.graphName, ep):
                     eps[ep] = res[ep]
             ret.update(eps)
         if sta:
@@ -902,7 +913,7 @@ class TigerGraphBase(object):
         Endpoint:      GET /echo  and  POST /echo
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-echo-and-post-echo
         """
-        return self.conn.get("/echo/" + self.graphname, resKey="message")
+        return self.conn.get("/echo/" + self.graphName, resKey="message")
 
     def getStatistics(self, seconds=10, segments=10) -> dict:
         """Retrieves real-time query performance statistics over the given time period.
@@ -925,7 +936,7 @@ class TigerGraphBase(object):
             segment = 10
         else:
             segment = max(min(segments, 0), 100)
-        return self.conn.get("/statistics/" + self.graphname + "?seconds=" + str(seconds) + "&segment=" + str(segment), resKey="")
+        return self.conn.get("/statistics/" + self.graphName + "?seconds=" + str(seconds) + "&segment=" + str(segment), resKey="")
 
     def getVersion(self, raw=False) -> [str, list]:
         """Retrieves the Git versions of all components of the system.
@@ -936,7 +947,7 @@ class TigerGraphBase(object):
         Endpoint:      GET /version
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-version
         """
-        response = requests.request("GET", "/version/" + self.graphname, headers=self.conn.authHeader)
+        response = requests.request("GET", "/version/" + self.graphName, headers=self.conn.authHeader)
         res = json.loads(response.text, strict=False)  # "strict=False" is why _get() was not used
 
         if raw:
@@ -974,7 +985,7 @@ class TigerGraphBase(object):
 
     def getEdition(self) -> str:
         """Gets the database edition information"""
-        ret = self.conn.get("/graph/" + self.graphname + "/vertices/dummy", resKey="", skipCheck=True)
+        ret = self.conn.get("/graph/" + self.graphName + "/vertices/dummy", resKey="", skipCheck=True)
         return ret["version"]["edition"]
 
     def getLicenseInfo(self) -> dict:

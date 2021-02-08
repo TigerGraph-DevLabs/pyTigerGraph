@@ -222,6 +222,29 @@ class TigerDriver(object):
 
     # GSQL support =================================================
 
+    def _cleanseResponse(self, res: str, asList: bool = False, sep: str = "\n"):
+        """Cleanse the message returned by the execute() function by removing all details of establishing the connection.
+
+        :param str res:
+            The response received from the execute() function.
+        :param bool asList:
+            Return the cleansed message as list of lines or as a (re)concatenated string (default).
+        :param str sep:
+            Separator character to be used in (re)concatenated string.
+        :return str|list:
+            The cleansed message, containing only text relevant to the execution of teh GSQL statement.
+        """
+        _res = res.split("\n")
+        ret = []
+        for l in _res:
+            if l.startswith("====") or l.startswith("Trying version:") or l.startswith("Connecting to") or l.startswith("If there is any relative path"):
+                pass
+            else:
+                ret.append(l)
+        if asList:
+            return ret
+        return sep.join(ret)
+
     def _initGsql(self):
         """Initialises the GSQL functionality: downloads the appropriate GSQL client JAR (if not available already)."""
 
@@ -267,25 +290,23 @@ class TigerDriver(object):
         if not self.gsqlInitiated:
             self._initGsql()
 
-        if local:
-            _options = ["-g", self.graphName]
-        else:
-            _options = []
-        if options is None:
-            _options.append(options)
+        cmd = ['java',
+               '-DGSQL_CLIENT_VERSION=v' + self.gsqlVersion.replace('.', '_'),
+               '-jar', self.jarName,
+               '-u', self.username,
+               '-p', self.password,
+               '-ip', self.serverUrl]
 
-        cmd = ['java', '-DGSQL_CLIENT_VERSION=v' + self.gsqlVersion.replace('.', '_'),
-               '-jar', self.jarName]
+        if local:
+            cmd += ["-g", self.graphName]
 
         if self.useCert:
             cmd += ['-cacert', self.certPath]
 
-        cmd += [
-            '-u', self.username,
-            '-p', self.password,
-            '-ip', self.serverUrl]
+        if options:
+            cmd += options
 
-        comp = subprocess.run(cmd + options + [query],
+        comp = subprocess.run(cmd + [query],
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE)
 
@@ -308,7 +329,7 @@ class TigerDriver(object):
             json_string = re.search(r"(\{|\[).*$", stdout.replace("\n", ""))[0]
             json_object = json.loads(json_string)
         except:
-            return stdout
+            return self._cleanseResponse(stdout)
         else:
             return json_object
 

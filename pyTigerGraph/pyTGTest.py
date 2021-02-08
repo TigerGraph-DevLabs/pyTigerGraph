@@ -10,7 +10,7 @@ if __name__ == '__main__':
 
 import json
 import pandas as pd
-from .pyTigerGraphBase import TigerGraphBase as tg
+from pyTigerGraphBase import TigerGraphBase as tg
 
 sep = "-" * 60
 
@@ -27,7 +27,7 @@ def pr(fn, res):
         print(json.dumps(res, indent=4))
 
 
-print("Start\n" + ("-"*100))
+print("Start\n" + ("-" * 100))
 
 conn = tg(host="http://127.0.0.1", restppPort="30900", gsPort="30240", graphname="FraudGraph", debug=True)
 # conn2 = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="26900", gsPort="26240", graphname="FraudGraph",     username="tigergraph", password="tigergraph", apiToken="el1op7a9eqrlq4ape5t452lukv991k7h")
@@ -53,8 +53,8 @@ conn = tg(host="http://127.0.0.1", restppPort="30900", gsPort="30240", graphname
 # print(token)
 
 
-#conn = tg.TigerGraphConnection(host="https://4eee9546b4c54934bfcefb7c990674a0.i.tgcloud.io", useCert=True)
-#conn.getToken("00ovojicm57lq7bedjgobjmbu3g6fvke")
+# conn = tg.TigerGraphConnection(host="https://4eee9546b4c54934bfcefb7c990674a0.i.tgcloud.io", useCert=True)
+# conn.getToken("00ovojicm57lq7bedjgobjmbu3g6fvke")
 
 
 # token = tg.TigerGraphConnection(host="https://szbtest.i.tgcloud.io/", graphname="MyGraph").getToken("p61cmnh2lqbkp5ra5n82ikm1htpm0jfb","26000000")[0]
@@ -233,7 +233,7 @@ pr("getSchema()", conn.getSchema())
 # pr("runInstalledQuery", conn.runInstalledQuery("CommonHops", "ep=109.6.13.1&fromTime=2020-04-15&toTime=2020-04-17&maxDepth=2"))
 # pr("runInstalledQuery", conn.runInstalledQuery("a01_journey_atlas", {"sample_size": "100"}))
 
-#some_variable = conn.runInstalledQuery("a01_journey_atlas", {"sample_size": "100"})
+# some_variable = conn.runInstalledQuery("a01_journey_atlas", {"sample_size": "100"})
 
 #
 # gsql="INTERPRET QUERY (INT a) FOR GRAPH $graphname {\
@@ -362,5 +362,6 @@ pr("getLoadingJobStatus()", conn.getLoadingJobStatus(res["jobId"]))
 # pr("getVertexTypes", conn.getVertexTypes())
 
 # pr("dropAll()", conn.dropAll())
+
 
 print("\n" + ("-" * 100) + "\nEnd")

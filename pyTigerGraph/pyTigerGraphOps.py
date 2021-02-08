@@ -1,7 +1,10 @@
 import json
 import re
 
-from pyTigerGraph import TigerGraphBase, TigerGraphException
+from pyTigerGraphBase import TigerGraphBase
+from pyTigerGraphException import TigerGraphException
+
+ERR_SCF = "Semantic Check Fails"
 
 
 class TigerGraphOps(TigerGraphBase):
@@ -48,8 +51,10 @@ class TigerGraphOps(TigerGraphBase):
 
     # Graphs ===================================================================
 
-    def createGraph(self, graphname, vertexTypes, edgeTypes=None, tags=None):
-        """Creates a graph
+    def createGraph(self, graphname: str, vertexTypes: [str, list], edgeTypes: [str, list] = None, admin: str = ""):
+        """Creates a graph (amd makes it the working graph).
+
+        Documentation: https://docs.tigergraph.com/dev/gsql-ref/ddl-and-loading/defining-a-graph-schema#create-graph
 
         :param str graphname:
             The name of the graph.
@@ -60,18 +65,55 @@ class TigerGraphOps(TigerGraphBase):
         :param str|list edgeTypes:
             The name(s) of the edge type(s) to be included in the graph.
             Ignored if `vertices` is "*".
-        :param str|list tags:
-            The name(s) of the tags applicable to all vertex types in the new graph.
+        :param str admin:
+            The name of the admin user (if other than creator).
         """
-        pass
+        vts = []
+        ets = []
+        _all = False
 
-    def dropGraph(self, graphname):
-        """Creates a graph
+        if not vertexTypes:
+            raise TigerGraphException("No vertex type was specified for graph creation")
+
+        if isinstance(vertexTypes, str):
+            if vertexTypes == "*":
+                _all = True
+            vts = [vertexTypes]
+        else:
+            vts = vertexTypes
+
+        if not _all:
+            if isinstance(edgeTypes, str):
+                ets = [edgeTypes]
+            else:
+                ets = edgeTypes
+
+        cmd = "CREATE GRAPH " + graphname + " (" + ", ".join(vts)
+        if not _all and ets:
+            cmd += ", " + ", ".join(ets)
+
+        cmd += ")"
+
+        res = self.conn.execute(cmd)
+        if not "The graph " + graphname + " is created" in res:
+            if ERR_SCF in res:
+                msg = res[res.find(ERR_SCF) + len(ERR_SCF) + 2:]
+                msg = msg[:msg.find("\n")]
+                raise TigerGraphException(msg)
+            else:
+                raise TigerGraphException(res)
+        return self.getCurrentGraph()
+
+    def dropGraph(self, graphname: str):
+        """Drops a graph.
+
+        Documentation: https://docs.tigergraph.com/dev/gsql-ref/ddl-and-loading/defining-a-graph-schema#drop-graph
 
         :param str graphname:
-            The name of the graph.
+            The name of the graph to be dropped.
         """
-        pass
+        self.conn.execute("DROP GRAPH " + graphname)
+        return self.getCurrentGraph()
 
     def clearGraphStore(self):
         """Clears the graph store; removing all vertices and edges from all graphs.
@@ -84,7 +126,7 @@ class TigerGraphOps(TigerGraphBase):
         """
         res = self.conn.execute("CLEAR GRAPH STORE -HARD", False)
         if not ("Successfully cleared graph store" in res and "Successfully started GPE GSE RESTPP" in res):
-            raise TigerGraphException("Error occurred while clearing graph store:\n" + res, None)
+            raise TigerGraphException("Error occurred while clearing graph store:\n" + res)
 
     def dropAll(self):
         """Clears the graph store and removes all definitions from the catalog.
@@ -97,7 +139,7 @@ class TigerGraphOps(TigerGraphBase):
         """
         res = self.conn.execute("DROP ALL", False)
         if not ("Successfully cleared graph store" in res and "Everything is dropped." in res):
-            raise TigerGraphException("Error occurred while dropping all:\n" + res, None)
+            raise TigerGraphException("Error occurred while dropping all:\n" + res)
 
     # Vertex types =============================================================
 
@@ -197,7 +239,7 @@ class TigerGraphOps(TigerGraphBase):
         @param str jobId:
             The ID of the (active) job
         """
-        return self.conn.get("/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action=" + action + "&jobId=" + jobId, authMode="pwd")
+        return self.conn.get("/gsqlserver/gsql/loadingjobs?graph=" + self.graphName + "&action=" + action + "&jobId=" + jobId, authMode="pwd")
 
     def startLoadingJob(self, name: str, files: list = None, streaming: bool = False):
         """Starts a loading job.
@@ -240,7 +282,7 @@ class TigerGraphOps(TigerGraphBase):
         }
         data = json.dumps(data)
 
-        res = self.conn.post("/gsqlserver/gsql/loadingjobs?graph=" + self.graphname + "&action=start", data=data, authMode="pwd")[name]
+        res = self.conn.post("/gsqlserver/gsql/loadingjobs?graph=" + self.graphName + "&action=start", data=data, authMode="pwd")[name]
         msg = res["message"]
         if "please check the GSQL log" in msg:
             log = ""
