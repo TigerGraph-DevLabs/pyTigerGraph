@@ -1,13 +1,17 @@
+import json
 import re
+import time
 import urllib.parse
+from datetime import datetime
 from typing import Union
 
 import pyTigerDriver as td
+import requests
 
 from pyTigerGraphException import TigerGraphException
 
 GLOBAL = "GLOBAL"
-GSQL_PREFIX = "/gsql"
+GSQL_PREFIX = "/gsqlserver/gsql/"
 
 
 class TigerGraphBase(object):
@@ -51,31 +55,35 @@ class TigerGraphBase(object):
         """
         self.url = urllib.parse.urlparse(host)
         self.conn = td.Client(self.url.netloc, username, password, False, "", gsqlVersion, "", restppPort, gsPort, self.url.scheme, graphname, apiToken)
+        self.restppPort = restppPort
+        self.apiToken = apiToken
         # TODO: cacert, commit?
 
         self.debug = debug
         self.graphName = graphname  # Current graph
-        self.schema : dict = {}
+        self.schema: dict = {}
         self.graphs = []  # TODO This should probably replace .schema (so that metadata for multiple graphs could be kept)
+
+        self._gsql_prefix_len = len(GSQL_PREFIX)
 
     # REST++ and GSQL Server API access ============================
 
-    def get(self, path: str, headers: Union[str, dict] = None, resKey: str = "results", skipCheck: bool = False, params: Union[str, dict] = None) -> dict:
+    def get(self, path: str, params: dict = None, headers: dict = None, resKey: str = "results", skipCheck: bool = False) -> dict:
         """Generic GET method.
 
         TODO: parameters
         """
         if path.startswith(GSQL_PREFIX):
-            return self.conn.Gsql.get(path, params, headers, resKey, skipCheck)
+            return self.conn.Gsql.get(path[self._gsql_prefix_len:], params, headers, resKey, skipCheck)
         return self.conn.Rest.get(path, params, headers, resKey, skipCheck)
 
-    def post(self, path: str, headers: Union[str, dict] = None, data=None, resKey: str = "results", skipCheck: bool = False, params: Union[str, dict] = None) -> dict:
+    def post(self, path: str, params: dict = None, data=None, headers: dict = None, resKey: str = "results", skipCheck: bool = False) -> dict:
         """Generic POST method.
 
         TODO: parameters
         """
         if path.startswith(GSQL_PREFIX):
-            return self.conn.Gsql.post(path, params, data, headers, resKey, skipCheck)
+            return self.conn.Gsql.post(path[self._gsql_prefix_len:], params, data, headers, resKey, skipCheck)
         return self.conn.Rest.post(path, params, data, headers, resKey, skipCheck)
 
     def delete(self, path: str) -> dict:
@@ -84,7 +92,7 @@ class TigerGraphBase(object):
         TODO: parameters
         """
         if path.startswith(GSQL_PREFIX):
-            return self.conn.Gsql.delete(path)
+            return self.conn.Gsql.delete(path[self._gsql_prefix_len:])
         return self.conn.Rest.delete(path)
 
     def execute(self, query: str) -> str:
@@ -110,43 +118,44 @@ class TigerGraphBase(object):
         """Collects metadata for various schema object types from the output of the `ls` gsql command."""
         # TODO: Make it capable of collecting metadata for any graphs? `USE GRAPH graphname` before?
 
-        res = self.execute('ls')
+        res = self.execute('LS')
 
-        for objType in ["VertexTypes", "EdgeTypes", "Indexes", "Queries", "LoadingJobs", "DataSources", "Graphs"]:  # TODO Remove "graph"
+        for objType in ["VertexTypes", "EdgeTypes", "Indexes", "Queries", "LoadingJobs", "DataSources", "Graphs"]:
             if objType not in self.schema:
                 self.schema[objType] = []
 
         qpatt = re.compile(r"[\s\S\n]+CREATE", re.MULTILINE)
 
-        res = res.split("\n")
         i = 0
         while i < len(res):
             line = res[i]
             # Processing vertices
-            if line.startswith("  - VERTEX"):
+            if "- VERTEX" in line:
                 vts = self.schema["VertexTypes"]
-                vtName = line[11:line.find("(")]
+                tmp = line[line.find("VERTEX "):]
+                vtName = tmp[7:line.find("(") - 2]
                 for vt in vts:
                     if vt["Name"] == vtName:
-                        vt["Statement"] = "CREATE " + line[4:]
+                        vt["Statement"] = "CREATE " + tmp
                         break
 
             # Processing edges
-            elif line.startswith("  - DIRECTED") or line.startswith("  - UNDIRECTED"):
+            elif "- DIRECTED EDGE" in line or "- UNDIRECTED EDGE" in line:
                 ets = self.schema["EdgeTypes"]
                 etName = line[line.find("EDGE") + 5:line.find("(")]
                 for et in ets:
                     if et["Name"] == etName:
-                        et["Statement"] = "CREATE " + line[4:]
+                        et["Statement"] = "CREATE " + line[line.find("- ") + 2:]
                         break
 
             # Processing indices (or indexes)
+            # TODO Statement
             elif line.startswith("Indexes:"):
                 i += 1
                 line = res[i]
                 idxs = self.schema["Indexes"]
                 while line != "":
-                    l2 = line[4:].split(":")
+                    l2 = line[line.find("- ") + 2:].split(":")
                     l21 = l2[1]
                     idx = {"Name": l2[0], "Vertex": l2[1][0:l21.find("(")], "Attribute": l21[l21.find("(") + 1:l21.find(")")]}
                     idxs.append(idx)
@@ -154,15 +163,15 @@ class TigerGraphBase(object):
                     line = res[i]
 
             # Processing loading jobs
-            elif res[i].startswith("  - CREATE LOADING JOB"):
+            elif "- CREATE LOADING JOB" in res[i]:
                 txt = ""
-                tmp = line[4:]
+                tmp = line[line.find("- ") + 2:]
                 txt += tmp + "\n"
                 jobName = tmp.split(" ")[3]
                 i += 1
                 line = res[i]
-                while not (line.startswith("  - CREATE") or line.startswith("Queries")):
-                    txt += line[4:] + "\n"
+                while not ("- CREATE" in line or line.startswith("Queries")):
+                    txt += line.lstrip() + "\n"
                     i += 1
                     line = res[i]
                 txt = txt.rstrip(" \n")
@@ -186,10 +195,10 @@ class TigerGraphBase(object):
                 i += 1
                 line = res[i]
                 while line != "":
-                    qName = line[4:line.find("(")]
+                    qName = line[line.find("- ") + 2:line.find("(")]
                     dep = line.endswith('(deprecated)')
-                    txt = self.execute("SHOW QUERY " + qName).rstrip(" \n")
-                    txt = re.sub(qpatt, "CREATE", txt)
+                    txt = self.execute("SHOW QUERY " + qName)
+                    txt = re.sub(qpatt, "CREATE", "\n".join(txt))
                     qs = self.schema["Queries"]
                     found = False
                     for q in qs:
@@ -208,7 +217,7 @@ class TigerGraphBase(object):
                 i += 1
                 line = res[i]
                 while line != "":
-                    udtName = line[4:line.find("(")].rstrip()
+                    udtName = line[line.find("- ") + 2:line.find("(")].rstrip()
                     us = self.schema["UDTs"]
                     for u in us:
                         if u["Name"] == udtName:
@@ -248,7 +257,7 @@ class TigerGraphBase(object):
         Endpoint:      GET /gsqlserver/gsql/udtlist
         Documentation: Not documented publicly
         """
-        res = self.get("/gsqlserver/gsql/udtlist?graph=" + self.graphName)
+        res = self.get("/gsqlserver/gsql/udtlist", {"graph=": self.graphName})
         for u in res:
             u["Name"] = u["name"]
             u.pop("name")
@@ -290,30 +299,46 @@ class TigerGraphBase(object):
         """Collects user metedata."""
         us = []
         res = self.execute("SHOW USER")
-        res = res.split("\n")
         i = 0
         while i < len(res):
             line = res[i]
             if "- Name:" in line:
-                if "tigergraph" in line:
-                    i += 1
-                    line = res[i]
-                    while line != "":
+                uName = line[line.find("- Name: ") + 8:]
+                grs = []
+                lrs = []
+                ses = {}
+                i += 1
+                line = res[i]
+                while line != "":
+                    if "- Roles: " in line:
+                        grs = line[line.find(": ") + 2:].split(", ")
+                    elif "- GraphName: " in line:
+                        gn = line[line.find(": ") + 2:]
                         i += 1
                         line = res[i]
-                else:
-                    uName = line[10:]
-                    roles = []
-                    i += 1
-                    line = res[i]
-                    while line != "":
-                        if "- GraphName: " + self.graphName in line:
+                        lrs.append({gn: line[line.find(":") + 2:].split(", ")})
+                    elif "- Secret: " in line:
+                        se = line[line.find("- Secret: ") + 10:]
+                        sd = {"Graph": "", "Alias": "", "Tokens": []}
+                        i += 1
+                        line = res[i]
+                        while i < len(res) and line and "- Secret: " not in line:
+                            if "- GraphName: " in line:
+                                sd["Graph"] = line[line.find(": ") + 2:]
+                            elif "- Alias: " in line:
+                                sd["Alias"] = line[line.find(": ") + 2:]
+                            elif "- Token: " in line:
+                                token = line[line.find("- Token: ") + 9:line.find(" expire at: ")]
+                                exp = line[line.find(" expire at: ") + 12:]
+                                sd["Tokens"].append((token, exp))
                             i += 1
                             line = res[i]
-                            roles = line[line.find(":") + 2:].split(", ")
-                        i += 1
-                        line = res[i]
-                    us.append({"Name": uName, "Roles": roles})
+                        ses[se] = sd
+                        # if "- Secret: " in line:
+                        i -= 1
+                    i += 1
+                    line = res[i]
+                us.append({"Name": uName, "GlobalRoles": grs, "LocalRoles": lrs, "Secrets": ses})
             i += 1
         self.schema["Users"] = us
 
@@ -321,26 +346,29 @@ class TigerGraphBase(object):
         """Collects proxy group metadata."""
         gs = []
         res = self.execute("SHOW GROUP")
-        res = res.split("\n")
         i = 0
         while i < len(res):
             line = res[i]
             if "- Name:" in line:
-                gName = line[10:]
-                roles = []
+                gName = line[line.find(": ") + 2:]
+                grs = []
+                lrs = []
                 rule = ""
                 i += 1
                 line = res[i]
                 while line != "":
-                    if "- GraphName: " + self.graphName in line:
+                    if "- Roles: " in line:
+                        grs = line[line.find(": ") + 2:].split(", ")
+                    elif "- GraphName: " in line:
+                        gn = line[line.find(": ") + 2:]
                         i += 1
                         line = res[i]
-                        roles = line[line.find(":") + 2:].split(", ")
+                        lrs.append({gn: line[line.find(":") + 2:].split(", ")})
                     elif "- Rule: " in line:
                         rule = line[line.find(":") + 2:]
                     i += 1
                     line = res[i]
-                gs.append({"Name": gName, "Roles": roles, "Rule": rule})
+                gs.append({"Name": gName, "Rule": rule, "GlobalRoles": grs, "LocalRoles": lrs})
             i += 1
         self.schema["Groups"] = gs
 
@@ -395,7 +423,7 @@ class TigerGraphBase(object):
 
     # Schema ===================================================================
 
-    def getSchema(self, full=True, force=False) -> dict:
+    def getSchema(self, full: bool = True, force: bool = False) -> dict:
         """Returns the schema of the current graph (can be global graph).
 
         :param full:
@@ -409,7 +437,8 @@ class TigerGraphBase(object):
         TODO: Investigate "/schema" that returns YAML
         """
         if not self.schema or force:
-            self.schema = self.get("/gsqlserver/gsql/schema?graph=" + self.graphName)
+            self.schema = self.get("/gsqlserver/gsql/schema", {"graph": self.graphName})
+            print(self.schema)
             ret = self.get("/graph/" + self.graphName + "/vertices/dummy", resKey="", skipCheck=True)
             self.schema["Version"] = ret["version"]["schema"]
         if full:
@@ -424,17 +453,19 @@ class TigerGraphBase(object):
                 self._getGroups()
         return self.schema
 
-    def getSchemaVersion(self, force=False) -> str:
+    def getSchemaVersion(self, force: bool = False) -> int:
         """Retrieves the schema version.
 
         :param force:
             If `True`, retrieves the schema details again, otherwise returns a cached copy of the schema details (if they were already fetched previously).
+        :return:
+            The current version of the schema.
         """
-        return self.getSchema(force=force)["Version"]
+        return int(self.getSchema(force=force)["Version"])
 
     # Vertex types =============================================================
 
-    def getVertexTypes(self, force=False) -> list:
+    def getVertexTypes(self, force: bool = False) -> list:
         """Returns the list of vertex type names of the current graph (can be global graph).
 
         :param force:
@@ -445,7 +476,7 @@ class TigerGraphBase(object):
             ret.append(vt["Name"])
         return ret
 
-    def getVertexType(self, vertexType, force=False) -> dict:
+    def getVertexType(self, vertexType: str, force: bool = False) -> dict:
         """Returns the details of the specified vertex type.
         Works within current graph (can be global graph).
 
@@ -453,13 +484,15 @@ class TigerGraphBase(object):
             The name of the vertex type.
         :param force:
             If `True`, forces the retrieval the schema details again, otherwise returns a cached copy of vertex type details (if they were already fetched previously).
+        :return:
+            The details of the specified vertex type.
         """
         for vt in self.getSchema(force=force)["VertexTypes"]:
             if vt["Name"] == vertexType:
                 return vt
         return {}  # Vertex type was not found
 
-    def getVertexCount(self, vertexType, where="") -> dict:
+    def getVertexCount(self, vertexType: str, where: str = "") -> dict:
         """Returns the number of vertices.
         Works within current graph (can be global graph).
 
@@ -467,6 +500,8 @@ class TigerGraphBase(object):
             The name of the vertex type.
         :param where:
             Filter condition.
+        :return:
+            A dictionary of <vertex_type>: <vertex_count> pairs.
 
         Uses:
         - If `vertexType` is "*": vertex count of all vertex types (`where` cannot be specified in this case)
@@ -474,8 +509,6 @@ class TigerGraphBase(object):
         - If `vertexType` and `where` are specified: vertex count of the given type after filtered by `where` condition(s)
 
         For valid values of `where` condition, see https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#filter
-
-        Returns a dictionary of <vertex_type>: <vertex_count> pairs.
 
         Endpoint:      GET /graph/{graph_name}/vertices
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-graph-graph_name-vertices
@@ -486,7 +519,7 @@ class TigerGraphBase(object):
         if where:
             if vertexType == "*":
                 raise TigerGraphException("VertexType cannot be \"*\" if where condition is specified.", "")
-            res = self.get("/graph/" + self.graphName + "/vertices/" + vertexType + "?count_only=true&filter=" + where)
+            res = self.get("/graph/" + self.graphName + "/vertices/" + vertexType, {"count_only": True, "filter": where})
         else:
             data = '{"function":"stat_vertex_number","type":"' + vertexType + '"}'
             res = self.post("/builtins/" + self.graphName, data=data)
@@ -497,7 +530,7 @@ class TigerGraphBase(object):
             ret[r["v_type"]] = r["count"]
         return ret
 
-    def getVertexStats(self, vertexTypes, skipNA=False) -> dict:
+    def getVertexStats(self, vertexTypes: str, skipNA: bool = False) -> dict:
         """Returns vertex attribute statistics.
         Works within current graph (can be global graph).
 
@@ -729,10 +762,10 @@ class TigerGraphBase(object):
                     url += "/" + targetVertexType
                     if targetVertexId:
                         url += "/" + str(targetVertexId)
-            url += "?count_only=true"
+            params = {"count_only": True}
             if where:
-                url += "&filter=" + where
-            res = self.get(url)
+                params["filter"] = where
+            res = self.get(url, params)
         else:
             if not edgeType:  # TODO is this a valid check?
                 raise TigerGraphException("A valid edge type or \"*\" must be specified for edge type.", "")
@@ -953,24 +986,129 @@ class TigerGraphBase(object):
             bui = builtin
             dyn = dynamic
             sta = static
-        url = "/endpoints/" + self.graphName + "?"
+        url = "/endpoints/" + self.graphName
         if bui:
             eps = {}
-            res = self.get(url + "builtin=true", resKey="")
+            res = self.get(url, {"builtin": True}, resKey="")
             for ep in res:
                 if not re.search(r" /graph/", ep) or re.search(r" /graph/{graph_name}/", ep):
                     eps[ep] = res[ep]
             ret.update(eps)
         if dyn:
             eps = {}
-            res = self.get(url + "dynamic=true", resKey="")
+            res = self.get(url, {"dynamic": True}, resKey="")
             for ep in res:
                 if re.search(r"^GET /query/" + self.graphName, ep):
                     eps[ep] = res[ep]
             ret.update(eps)
         if sta:
-            ret.update(self.get(url + "static=true", resKey=""))
+            ret.update(self.get(url, {"static": True}, resKey=""))
         return ret
+
+    # Authentication and security ==============================================
+
+    def getToken(self, secret: str, setToken: bool = True, lifetime: int = None) -> tuple:
+        """Requests an authorization token.
+
+        :param secret:
+            The secret (string) generated in GSQL using `CREATE SECRET`.
+            See https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#managing-credentials
+        :param setToken:
+            Set the connection's API token to the new value (default: true).
+        :param lifetime:
+            Duration of token validity (in secs, default 30 days = 2,592,000 secs).
+        :return:
+            A tuple of (<new_token>, <expiration_timestamp_unixtime>, <expiration_timestamp_ISO8601>).
+            Return value can be ignored.
+
+        This function returns a token only if REST++ authentication is enabled. If not, an exception will be raised.
+        See: https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#rest-authentication
+
+        Note: expiration timestamp's time zone might be different from your computer's local time zone.
+
+        Endpoint:      GET /requesttoken
+        Documentation: https://docs.tigergraph.com/dev/restpp-api/restpp-requests#requesting-a-token-with-get-requesttoken
+        """
+        url = self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + ("&lifetime=" + str(lifetime) if lifetime else "")
+        if self.debug:
+            print(url)
+        res = json.loads(requests.request("GET", url).text)
+        if not res["error"]:
+            token = res["token"]
+            if setToken:
+                self.conn.Rest.setToken(token)
+                self.apiToken = token
+            print(self.conn.Gsql.token)
+            print(self.conn.Rest.token)
+            return (token, res["expiration"], datetime.utcfromtimestamp(res["expiration"]).strftime('%Y-%m-%d %H:%M:%S'))
+        if "Endpoint is not found from url = /requesttoken" in res["message"]:
+            raise TigerGraphException("REST++ authentication is not enabled, can't generate token.", "")
+        raise TigerGraphException(res["message"], (res["code"] if "code" in res else None))
+
+    def refreshToken(self, secret: str, token: str = None, lifetime: int = 2592000) -> tuple:
+        """Extends a token's lifetime.
+
+        :param str secret:
+            The secret (string) generated in GSQL using `CREATE SECRET`.
+            See https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#managing-credentials
+        :param token:
+            The token requested earlier. If not specified, refreshes current connection's token.
+        :param lifetime:
+            Duration of token validity (in secs, default 30 days = 2,592,000 secs) from current system timestamp.
+        :return:
+            Returns a tuple of (<token>, <expiration_timestamp_unixtime>, <expiration_timestamp_ISO8601>).
+            Return value can be ignored.
+            Raises exception if specified token does not exists.
+
+        This function works only if REST++ authentication is enabled. If not, an exception will be raised.
+        See: https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#rest-authentication
+
+        Note:
+        - New expiration timestamp will be `now + lifetime` seconds, _not_ `current expiration timestamp + lifetime` seconds.
+        - Expiration timestamp's time zone might be different from your computer's local time zone.
+
+        Endpoint:      PUT /requesttoken
+        Documentation: https://docs.tigergraph.com/dev/restpp-api/restpp-requests#refreshing-tokens
+        """
+        if not token:
+            token = self.apiToken
+        res = json.loads(requests.request("PUT", self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + "&token=" + token + ("&lifetime=" + str(lifetime) if lifetime else "")).text)
+        if not res["error"]:
+            exp = time.time() + res["expiration"]
+            return res["token"], int(exp), datetime.utcfromtimestamp(exp).strftime('%Y-%m-%d %H:%M:%S')
+        if "Endpoint is not found from url = /requesttoken" in res["message"]:
+            raise TigerGraphException("REST++ authentication is not enabled, can't refresh token.", "")
+        raise TigerGraphException(res["message"], (res["code"] if "code" in res else None))
+
+    def deleteToken(self, secret: str, token: str = None, skipNA: bool = True) -> bool:
+        """Deletes a token.
+
+        :param secret:
+            The secret (string) generated in GSQL using `CREATE SECRET`.
+            See https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#managing-credentials
+        :param token:
+            The token requested earlier. If not specified, deletes current connection's token, so be careful.
+        :param skipNA:
+            Don't raise exception if specified token does not exist.
+        :return:
+            `True` if deletion was successful or token did not exist but `skipNA` was `True`; raises exception otherwise.
+
+        This function works only if REST++ authentication is enabled. If not, an exception will be raised.
+        See: https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#rest-authentication
+
+        Endpoint:      DELETE /requesttoken
+        Documentation: https://docs.tigergraph.com/dev/restpp-api/restpp-requests#deleting-tokens
+        """
+        if not token:
+            token = self.apiToken
+        res = json.loads(requests.request("DELETE", self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + "&token=" + token).text)
+        if not res["error"]:
+            return True
+        if res["code"] == "REST-3300" and skipNA:
+            return True
+        if "Endpoint is not found from url = /requesttoken" in res["message"]:
+            raise TigerGraphException("REST++ authentication is not enabled, can't delete token.", "")
+        raise TigerGraphException(res["message"], (res["code"] if "code" in res else None))
 
     # Other functions ==========================================================
 
@@ -1005,7 +1143,7 @@ class TigerGraphBase(object):
             segment = 10
         else:
             segment = max(min(segments, 0), 100)
-        return self.get("/statistics/" + self.graphName + "?seconds=" + str(seconds) + "&segment=" + str(segment), resKey="")
+        return self.get("/statistics/" + self.graphName, {"seconds": seconds, "segment": segment}, resKey="")
 
     def getVersion(self) -> [str, list]:
         """Retrieves the Git versions of all components of the system.
@@ -1016,7 +1154,7 @@ class TigerGraphBase(object):
         Endpoint:      GET /version
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-version
         """
-        res = self.get("/version/" + self.graphName)
+        res = self.get("/version/" + self.graphName, resKey="")
 
         res = res["message"].split("\n")
         components = []
@@ -1058,6 +1196,7 @@ class TigerGraphBase(object):
         """Returns the expiration date and remaining days of the license.
 
         In case of evaluation/trial deployment, an information message and -1 remaining days are returned.
+        TODO This endpoint is deprecated; what is the current endpoint?
         """
         res = self.get("/showlicenseinfo", resKey="", skipCheck=True)
         ret = {}

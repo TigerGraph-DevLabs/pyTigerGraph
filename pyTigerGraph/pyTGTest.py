@@ -29,7 +29,8 @@ def pr(fn, res):
 
 print("Start\n" + ("-" * 100))
 
-conn = tg(host="http://127.0.0.1", restppPort="30900", gsPort="30240", graphname="FraudGraph", debug=True)
+conn = tg(host="http://127.0.0.1", username="tigergraph", password="tg1", restppPort="30900", gsPort="30240", graphname="MyGraph", debug=True)
+# conn = tg(host="http://127.0.0.1", restppPort="31900", gsPort="31240", graphname="nile", debug=True)
 # conn2 = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="26900", gsPort="26240", graphname="FraudGraph",     username="tigergraph", password="tigergraph", apiToken="el1op7a9eqrlq4ape5t452lukv991k7h")
 # conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="25900", gsPort="25240", graphname="g2",             username="tigergraph", password="szilard",    apiToken="kc93as8gdaqcbjvl30o8jvv5flufmtvn")
 # conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort=25900,   gsPort=25240,   graphname="cre_evaluation", username="tigergraph", password="tigergraph", apiToken="2aa016d747ede9gg6da4drslm98srfoj")
@@ -49,7 +50,7 @@ conn = tg(host="http://127.0.0.1", restppPort="30900", gsPort="30240", graphname
 # token = conn.getToken("cmkfcms8k6sgj5gcssv2fhbp4gh12oh3")
 
 # conn = tg.TigerGraphBase(host="https://szbtg-test.i.tgcloud.io", graphname="test", useCert=True)
-# conn.getToken("5tuhjn4neko0amsmh2k9ipdlrj2uldna")
+token = conn.getToken("g55m4941j2ere8fo32ie4nifs2g1c3h7")
 # print(token)
 
 
@@ -261,7 +262,7 @@ pr("getSchema()", conn.getSchema())
 # echo -- Diagnostics
 # https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-echo-and-post-echo
 # Expected response: {'error': False, 'message': 'Hello GSQL'}
-pr("/echo", conn.echo())
+# pr("/echo", conn.echo())
 
 # endpoints - List of the installed endpoints and their parameters
 # https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-endpoints
