@@ -29,8 +29,8 @@ class TigerGraphBase(object):
     """Base Python wrapper for TigerGraph's REST++ and GSQL APIs."""
 
     def __init__(self, host: str = "http://localhost", graphname: str = "MyGraph", username: str = "tigergraph", password: str = "tigergraph",
-                 restppPort: Union[str, int] = "9000", gsPort: Union[str, int] = "14240", apiToken: str = "", gsqlVersion: str = "",
-                 certPath: str = "", debug: bool = False):
+            restppPort: Union[str, int] = "9000", gsPort: Union[str, int] = "14240", apiToken: str = "", gsqlVersion: str = "",
+            certPath: str = "", debug: bool = False):
         """Initiate a connection object.
 
         :param host:
@@ -271,9 +271,9 @@ class TigerGraphBase(object):
                 while line.lstrip().startswith("- "):
                     dsDetails = line[4:].split()
                     dss.append({"Name": dsDetails[1], "Type": dsDetails[0], "Details": dsDetails[2],
-                                "Statement": "CREATE DATA_SOURCE " + dsDetails[0].upper() + " " + dsDetails[1] + ' = "' +
-                                             dsDetails[2].lstrip("(").rstrip(")").replace('"', "'") + '"'
-                                })
+                        "Statement": "CREATE DATA_SOURCE " + dsDetails[0].upper() + " " + dsDetails[1] + ' = "' +
+                                     dsDetails[2].lstrip("(").rstrip(")").replace('"', "'") + '"'
+                    })
                     i = i + 1
                     line = res[i]
 
@@ -1182,8 +1182,8 @@ class TigerGraphBase(object):
         if not token:
             token = self.apiToken
         res = json.loads(requests.request("PUT",
-                                          self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + "&token=" + token + (
-                                              "&lifetime=" + str(lifetime) if lifetime else "")).text)
+            self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + "&token=" + token + (
+                "&lifetime=" + str(lifetime) if lifetime else "")).text)
         if not res["error"]:
             exp = time.time() + res["expiration"]
             return res["token"], int(exp), datetime.utcfromtimestamp(exp).strftime('%Y-%m-%d %H:%M:%S')
@@ -1213,7 +1213,7 @@ class TigerGraphBase(object):
         if not token:
             token = self.apiToken
         res = json.loads(requests.request("DELETE",
-                                          self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + "&token=" + token).text)
+            self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + "&token=" + token).text)
         if not res["error"]:
             return True
         if res["code"] == "REST-3300" and skipNA:
