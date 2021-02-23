@@ -29,7 +29,7 @@ def pr(fn, res):
 
 print("Start\n" + ("-" * 100))
 
-conn = tg(host="http://127.0.0.1", username="tigergraph", password="tg1", restppPort="30900", gsPort="30240", graphname="MyGraph", debug=True)
+conn = tg(host="http://127.0.0.1", username="tigergraph", password="tigergraph1", restppPort="30900", gsPort="30240", graphname="MyGraph", debug=True)
 # conn = tg(host="http://127.0.0.1", restppPort="31900", gsPort="31240", graphname="nile", debug=True)
 # conn2 = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="26900", gsPort="26240", graphname="FraudGraph",     username="tigergraph", password="tigergraph", apiToken="el1op7a9eqrlq4ape5t452lukv991k7h")
 # conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="25900", gsPort="25240", graphname="g2",             username="tigergraph", password="szilard",    apiToken="kc93as8gdaqcbjvl30o8jvv5flufmtvn")
@@ -50,7 +50,7 @@ conn = tg(host="http://127.0.0.1", username="tigergraph", password="tg1", restpp
 # token = conn.getToken("cmkfcms8k6sgj5gcssv2fhbp4gh12oh3")
 
 # conn = tg.TigerGraphBase(host="https://szbtg-test.i.tgcloud.io", graphname="test", useCert=True)
-token = conn.getToken("g55m4941j2ere8fo32ie4nifs2g1c3h7")
+token = conn.getToken("7dcavgjrsouqinebukfek4cu15a1e3ac")
 # print(token)
 
 
@@ -73,13 +73,18 @@ conn.debug = True
 # conn2.debug = True
 # conn3.debug = True
 
+# Graph related functions ======================================================
+
+# pr("getGraphs()", conn.getGraphs())
 # Schema related functions =====================================================
 
 # Get schema metadata
-pr("getSchema()", conn.getSchema())
+# pr("getSchema()", conn.getSchema())
 # pr("getSchema()", conn.getSchema(False))
 # pr("getSchema()", conn.getSchema(udts=False))
 # pr("getSchemaVersion()", conn.getSchemaVersion())
+
+pr("LS", conn.execute("LS"))
 
 # Get Used Defined Types
 # pr("getUDTs", conn.getUDTs())

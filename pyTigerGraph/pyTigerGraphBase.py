@@ -11,19 +11,33 @@ import requests
 from pyTigerGraphException import TigerGraphException
 
 GLOBAL = "GLOBAL"
+
+VTS = "VertexTypes"
+IXS = "Indexes"
+ETS = "EdgeTypes"
+QUS = "Queries"
+DSS = "DataSources"
+LJS = "LoadingJobs"
+SCJS = "SchemaChangeJobs"
+TAGS = "Tags"
+UDTS = "UserDefinedTypes"
+
 GSQL_PREFIX = "/gsqlserver/gsql/"
 
 
 class TigerGraphBase(object):
     """Base Python wrapper for TigerGraph's REST++ and GSQL APIs."""
 
-    def __init__(self, host: str = "http://localhost", graphname: str = "MyGraph", username: str = "tigergraph", password: str = "tigergraph", restppPort: Union[str, int] = "9000", gsPort: Union[str, int] = "14240", apiToken: str = "", gsqlVersion: str = "", tgPath: str = "", useCert: bool = False, certPath: str = "", debug: bool = False):
+    def __init__(self, host: str = "http://localhost", graphname: str = "MyGraph", username: str = "tigergraph", password: str = "tigergraph",
+                 restppPort: Union[str, int] = "9000", gsPort: Union[str, int] = "14240", apiToken: str = "", gsqlVersion: str = "",
+                 certPath: str = "", debug: bool = False):
         """Initiate a connection object.
 
         :param host:
             The IP address or hostname of the TigerGraph server, including the scheme (`http` or `https`).
         :param graphname:
             The name of the graph.
+            TODO: Change default to GLOBAL? (tokens are linked to secrets linked to graphs!)
         :param username:
             The username on the TigerGraph server.
         :param password:
@@ -32,38 +46,37 @@ class TigerGraphBase(object):
             The port for REST++ queries.
         :param gsPort:
             The port of all other queries (GSQL server).
-        :param gsPort:
-            The port of all other queries (GSQL server).
         :param apiToken:
             A token to use when making queries. Ignored if REST++ authentication is not enabled.
         :param gsqlVersion:
-            The version of GSQL client to be used. Default to database version.
-            pyTigerGraph can detect the version from the database, but in rare cases (when the changes/fixes do not impact the GSQL functionality) no new GSQL version is released
-            when a new version of the database is shipper. In these cases an appropriate GSQL client version needs to be manually specified (typically the latest available version
-            lesser than the database version).
+            The version of GSQL client to be used. Defaults to database version.
+            pyTigerGraph can detect the version from the database, but in rare cases (when the changes/fixes do not impact the GSQL functionality) no new GSQL
+                version is released atthe time when a new version of the database is shipped. In these cases an appropriate GSQL client version needs to be
+                manually specified (typically the latest available version lesser than the database version).
             You can check the list of available GSQL clients at https://bintray.com/tigergraphecosys/tgjars/gsql_client
-        :param tgPath:
-            The directory where TigerGraph related configuration and certification files and downloaded executables are stored. Default is "~/.tigergraph"
-        :param useCert:
-            True if you need to use a certificate because the server is secure (such as on TigerGraph
-                               Cloud). This needs to be False when connecting to an unsecure server such as a TigerGraph Developer instance.
-                               When True the certificate would be downloaded when it is first needed.
         :param certPath:
             The folder/directory _and_ the name of the SSL certification file where the certification should be stored.
+            If certificate is not available, the underlying driver will attempt to download it from the server.
         :param debug:
             Enables debug output.
         """
         self.url = urllib.parse.urlparse(host)
-        self.conn = td.Client(self.url.netloc, username, password, False, "", gsqlVersion, "", restppPort, gsPort, self.url.scheme, graphname, apiToken)
+        self.conn = td.Client(self.url.netloc, username, password, False, certPath, gsqlVersion, "", restppPort, gsPort, self.url.scheme, graphname, apiToken)
         self.restppPort = restppPort
         self.apiToken = apiToken
         # TODO: cacert, commit?
+        # TODO logger
+
+        self.graphName = graphname  # Current graph
+
+        self.graphs = []  # Names of all (accessible/visible) graphs in the database (caution: see `_getGraphs()`)
+        self.schemas = {}  # The details of all graphs
+        self.udts = []  # The details of all UDTs (global types)
+        self.dataSources = []  # The details of data sources (global objects)
+        self.users = []  # The details of users (visibility depends on role)
+        self.groups = []  # The details of proxy groups (visibility depends on role)
 
         self.debug = debug
-        self.graphName = graphname  # Current graph
-        self.schema: dict = {}
-        self.graphs = []  # TODO This should probably replace .schema (so that metadata for multiple graphs could be kept)
-
         self._gsql_prefix_len = len(GSQL_PREFIX)
 
     # REST++ and GSQL Server API access ============================
@@ -98,7 +111,8 @@ class TigerGraphBase(object):
     def execute(self, query: str) -> str:
         """Executes an arbitrary GSQL statement.
 
-        ⚠️ Some GSQL statements are interactive, i.e. they expect user keyboard input (and thus will make your app hung); some display a progress indicator that is refreshed multiple times.
+        ⚠️ Some GSQL statements are interactive, i.e. they expect user keyboard input (and thus will make your app hung); some display a progress indicator that
+            is refreshed multiple times.
         Make sure that you are executing only such GSQL statements that are not interactive and only produce real results.
         Preferably do not use this function if there is an equivalent pyTigerGraph function for it.
 
@@ -111,118 +125,142 @@ class TigerGraphBase(object):
     # Metadata collection ======================================================
 
     def _getGraphs(self):
-        """Collects the names of all graphs in the database."""
-        pass
+        """Collects the names of all graphs in the database.
 
-    def _getSchemaLs(self):
-        """Collects metadata for various schema object types from the output of the `ls` gsql command."""
-        # TODO: Make it capable of collecting metadata for any graphs? `USE GRAPH graphname` before?
+        ⚠️ `SHOW GRAPH *` currently lists all graphs, even if user does not have any role/privilege over them. This is expected to change in the future to
+            show only those graphs that user has any relavant role/privilege over.
+        """
+        ret = self.execute("SHOW GRAPH *")
+        gs = []
+        for g in ret:
+            if "- Graph " in g:
+                gn = g[g.find("- Graph ") + 8:g.find("(")]
+                gs.append(gn)
+        self.graphs = gs
 
-        res = self.execute('LS')
+    def _isGlobal(self, objectType: str, objectTypeName: str) -> bool:
+        ots = self.schemas[GLOBAL][objectType]
+        for ot in ots:
+            if "Name" in ot and ot["Name"] == objectTypeName:
+                return True
+        return False
 
-        for objType in ["VertexTypes", "EdgeTypes", "Indexes", "Queries", "LoadingJobs", "DataSources", "Graphs"]:
-            if objType not in self.schema:
-                self.schema[objType] = []
+    def _ls(self, graphName: str = "") -> dict:
+        """Collects metadata for various graph objects and object types from the output of the `LS` GSQL command."""
+
+        # Switch graph if necessary
+        lastGraphName = self.graphName
+        gl = graphName == GLOBAL
+        if lastGraphName != graphName:
+            if gl:
+                self.execute("USE GLOBAL")
+            else:
+                self.execute("USE GRAPH " + graphName)
 
         qpatt = re.compile(r"[\s\S\n]+CREATE", re.MULTILINE)
+
+        vts = []  # Vertex types
+        ixs = []  # Indices
+        ets = []  # Edge types
+        qus = []  # Queries
+        dss = []  # Data sources
+        ljs = []  # Loading jobs
+        scjs = []  # Schema change jobs
+        tags = []  # Tags (vertex level access control)
+        udts = []  # User Defined Types
+
+        res = self.execute('LS')
 
         i = 0
         while i < len(res):
             line = res[i]
-            # Processing vertices
+            # Processing vertex types
             if "- VERTEX" in line:
-                vts = self.schema["VertexTypes"]
-                tmp = line[line.find("VERTEX "):]
-                vtName = tmp[7:line.find("(") - 2]
-                for vt in vts:
-                    if vt["Name"] == vtName:
-                        vt["Statement"] = "CREATE " + tmp
-                        break
-
-            # Processing edges
-            elif "- DIRECTED EDGE" in line or "- UNDIRECTED EDGE" in line:
-                ets = self.schema["EdgeTypes"]
-                etName = line[line.find("EDGE") + 5:line.find("(")]
-                for et in ets:
-                    if et["Name"] == etName:
-                        et["Statement"] = "CREATE " + line[line.find("- ") + 2:]
-                        break
+                vtn = line[line.find("- VERTEX ") + 9:line.find("(") - 2]
+                vt = {"Name": vtn, "Statement": line[line.find("- ") + 2:]}
+                if not gl:
+                    vt["GlobalType"] = self._isGlobal(VTS, vtn)
+                vts.append(vt)
 
             # Processing indices (or indexes)
-            # TODO Statement
             elif line.startswith("Indexes:"):
                 i += 1
                 line = res[i]
-                idxs = self.schema["Indexes"]
-                while line != "":
-                    l2 = line[line.find("- ") + 2:].split(":")
-                    l21 = l2[1]
-                    idx = {"Name": l2[0], "Vertex": l2[1][0:l21.find("(")], "Attribute": l21[l21.find("(") + 1:l21.find(")")]}
-                    idxs.append(idx)
+                while line.lstrip().startswith("- "):
+                    tmp1 = line[line.find("- ") + 2:].split(":")
+                    tmp2 = tmp1[1]
+                    ixn = tmp1[0]
+                    vtn = tmp1[1][0:tmp2.find("(")]
+                    att = tmp2[tmp2.find("(") + 1:tmp2.find(")")]
+                    gt = True
+                    if not gl:
+                        gt = self._isGlobal(IXS, ixn)
+                    stmt = ""  # TODO
+                    ix = {"Name": ixn, "Statement": stmt, "Vertex": vtn, "Attribute": att, "GlobalType": gt}
+                    ixs.append(ix)
                     i = i + 1
                     line = res[i]
+
+            # Processing edge types
+            elif "- DIRECTED EDGE" in line or "- UNDIRECTED EDGE" in line:
+                etn = line[line.find("EDGE") + 5:line.find("(")]
+                et = {"Name": etn, "Statement": line[line.find("- ") + 2:]}
+                if not gl:
+                    et["GlobalType"] = self._isGlobal("EdgeType", etn)
+                ets.append(et)
 
             # Processing loading jobs
             elif "- CREATE LOADING JOB" in res[i]:
                 txt = ""
-                tmp = line[line.find("- ") + 2:]
-                txt += tmp + "\n"
-                jobName = tmp.split(" ")[3]
+                stmt = line[line.find("- ") + 2:]
+                txt += stmt + "\n"
+                jobName = stmt.split(" ")[3]
                 i += 1
                 line = res[i]
                 while not ("- CREATE" in line or line.startswith("Queries")):
-                    txt += line.lstrip() + "\n"
+                    txt += line.lstrip() + "\n"  # TODO Do we need to lstrip here?
                     i += 1
                     line = res[i]
                 txt = txt.rstrip(" \n")
 
-                fds = []
-                fd = re.findall(r"define\s+filename\s+.+?;", txt.replace("\n", " "), re.IGNORECASE)
+                fds = []  # Filename definitions
+                fd = re.findall(r"DEFINE\s+FILENAME\s+.+?;", txt.replace("\n", " "), re.IGNORECASE)
                 for f in fd:
-                    tmp = re.sub(r"define\s+filename\s+", "", f, 0, re.IGNORECASE).rstrip(";")
-                    tmp = re.split(r"\s+=\s+", tmp)
-                    if len(tmp) == 2:
-                        tmp = (tmp[0], tmp[1])
+                    stmt = re.sub(r"DEFINE\s+FILENAME\s+", "", f, 0, re.IGNORECASE).rstrip(";")
+                    stmt = re.split(r"\s+=\s+", stmt)
+                    if len(stmt) == 2:
+                        stmt = (stmt[0], stmt[1])
                     else:
-                        tmp = (tmp[0], "")
-                    fds.append(tmp)
+                        stmt = (stmt[0], "")
+                    fds.append(stmt)
 
                 i -= 1
-                self.schema["LoadingJobs"].append({"Name": jobName, "FilenameDefinitions": fds, "Statement": txt})
+                ljs.append({"Name": jobName, "Statement": txt, "FilenameDefinitions": fds})
+
+            # Processing schema change jobs
+            # TODO
 
             # Processing queries
             elif line.startswith("Queries:"):
                 i += 1
                 line = res[i]
-                while line != "":
+                while line.lstrip().startswith("- "):
                     qName = line[line.find("- ") + 2:line.find("(")]
                     dep = line.endswith('(deprecated)')
                     txt = self.execute("SHOW QUERY " + qName)
                     txt = re.sub(qpatt, "CREATE", "\n".join(txt))
-                    qs = self.schema["Queries"]
-                    found = False
-                    for q in qs:
-                        if q["Name"] == qName:
-                            q["Statement"] = txt
-                            q["Deprecated"] = dep
-                            found = True
-                            break
-                    if not found:  # Most likely the query is created but not installed
-                        qs.append({"Name": qName, "Statement": txt, "Deprecated": dep})
+                    qus.append({"Name": qName, "Statement": txt, "Deprecated": dep})
                     i = i + 1
                     line = res[i]
 
             # Processing UDTs
+            #
             elif line.startswith("User defined tuples:"):
                 i += 1
                 line = res[i]
-                while line != "":
+                while line.lstrip().startswith("- "):
                     udtName = line[line.find("- ") + 2:line.find("(")].rstrip()
-                    us = self.schema["UDTs"]
-                    for u in us:
-                        if u["Name"] == udtName:
-                            u["Statement"] = "TYPEDEF TUPLE <" + line[line.find("(") + 1:-1] + "> " + udtName
-                            break
+                    udts.append({"Name": udtName, "Statement": "TYPEDEF TUPLE <" + line[line.find("(") + 1:-1] + "> " + udtName})
                     i = i + 1
                     line = res[i]
 
@@ -230,50 +268,52 @@ class TigerGraphBase(object):
             elif line.startswith("Data Sources:"):
                 i += 1
                 line = res[i]
-                while line != "":
+                while line.lstrip().startswith("- "):
                     dsDetails = line[4:].split()
-                    ds = {"Name": dsDetails[1], "Type": dsDetails[0], "Details": dsDetails[2], "Statement": [
-                        "CREATE DATA_SOURCE " + dsDetails[0].upper() + " " + dsDetails[1] + ' = "' + dsDetails[2].lstrip("(").rstrip(")").replace('"', "'") + '"',
-                        "GRANT DATA_SOURCE " + dsDetails[1] + " TO GRAPH " + self.graphName
-                    ]}
-                    self.schema["DataSources"].append(ds)
+                    dss.append({"Name": dsDetails[1], "Type": dsDetails[0], "Details": dsDetails[2],
+                                "Statement": "CREATE DATA_SOURCE " + dsDetails[0].upper() + " " + dsDetails[1] + ' = "' +
+                                             dsDetails[2].lstrip("(").rstrip(")").replace('"', "'") + '"'
+                                })
                     i = i + 1
                     line = res[i]
 
-            # Processing graphs (actually, only one graph should be listed)
-            # TODO: Move graph metadata handling out from this functionality
-            elif line.startswith("  - Graph"):
-                gName = line[10:line.find("(")]
-                self.schema["Graphs"].append({"Name": gName, "Statement": "CREATE GRAPH " + line[10:].replace(":v", "").replace(":e", ""), "Text": line[10:]})
-
-            # Ignoring the rest (schema change jobs, labels, comments, empty lines, etc.)
+            # Ignoring the rest (graphs, labels, comments, empty lines, etc.)
             else:
                 pass
             i += 1
 
-    def _getUDTs(self):
-        """Collects User Defined Types (UDTs) metadata.
+        # If needed, switch back to previous graph
+        if lastGraphName != graphName:
+            if lastGraphName == GLOBAL:
+                self.execute("USE GLOBAL")
+            else:
+                self.execute("USE GRAPH " + lastGraphName)
 
-        Endpoint:      GET /gsqlserver/gsql/udtlist
-        Documentation: Not documented publicly
-        """
-        res = self.get("/gsqlserver/gsql/udtlist", {"graph=": self.graphName})
-        for u in res:
-            u["Name"] = u["name"]
-            u.pop("name")
-            u["Fields"] = u["fields"]
-            u.pop("fields")
-        self.schema["UDTs"] = res
+        ret = {}
+        if graphName == GLOBAL:
+            ret = {VTS: vts, IXS: ixs, ETS: ets, DSS: dss, SCJS: scjs, UDTS: udts}
+        else:
+            ret = {VTS: vts, IXS: ixs, ETS: ets, QUS: qus, DSS: dss, LJS: ljs, SCJS: scjs, TAGS: tags}
+        return ret
+
+    def _getVertexTypes(self, graphName: str):
+        pass
+
+    def _getIndices(self, grahName: str):
+        pass
+
+    def _getEdgeTypes(self, graphName: str):
+        pass
 
     # TODO: GET /gsqlserver/gsql/queryinfo
     #       https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-gsqlserver-gsql-queryinfo-get-query-metadata
 
-    def _getQueries(self):
+    def _getQueries(self, graphName: str = ""):
         """Collects query metadata from REST++ endpoint.
 
         It will not return data for queries that are saved but not (yet) installed.
         """
-        qs = self.schema["Queries"]
+        qs = self.schemas[graphName]["Queries"]
         eps = self.getEndpoints(dynamic=True)
         for ep in eps:
             e = eps[ep]
@@ -294,6 +334,34 @@ class TigerGraphBase(object):
             query["Parameters"] = params
             query["Endpoint"] = ep.split(" ")[1]
             query["Method"] = ep.split(" ")[0]
+
+    def _getJobs(self, graphName: str) -> dict:
+        ret = {}
+        return ret
+
+    def _getTags(self, graphName: str) -> dict:
+        ret = {}
+        return ret
+
+    def _getUDTs(self):
+        """Collects User Defined Types (UDTs) metadata.
+
+        UDT details are actually collected from two sources. This function first fetches name and statement from LS (by refreshing the complete GLOBAL schema),
+            then it retrieves field details from REST++ API.
+
+        Endpoint:      GET /gsqlserver/gsql/udtlist
+        Documentation: Not documented publicly
+        """
+
+        self._getSchema(GLOBAL)
+        res = self.get("/gsqlserver/gsql/udtlist", {"graph=": self.graphName})
+        for u1 in res:
+            found = False
+            for u2 in self.udts:
+                if u2["Name"] == u1["name"]:
+                    u2["Fields"] = u1["fields"]
+            if not found:  # This should not happen (all UDTs should already be enumerated by LS)
+                self.udts.append({"Name": u1["name"], "Fields": u1["fields"]})
 
     def _getUsers(self):
         """Collects user metedata."""
@@ -340,7 +408,7 @@ class TigerGraphBase(object):
                     line = res[i]
                 us.append({"Name": uName, "GlobalRoles": grs, "LocalRoles": lrs, "Secrets": ses})
             i += 1
-        self.schema["Users"] = us
+        self.users = us
 
     def _getGroups(self):
         """Collects proxy group metadata."""
@@ -370,13 +438,44 @@ class TigerGraphBase(object):
                     line = res[i]
                 gs.append({"Name": gName, "Rule": rule, "GlobalRoles": grs, "LocalRoles": lrs})
             i += 1
-        self.schema["Groups"] = gs
+        self.groups = gs
+
+    def _getSchema(self, graphName: str = "", full=True):
+        ret = {}
+
+        # Retrieving vertex and edge types first
+        if graphName == GLOBAL:
+            ret = self._ls(GLOBAL)
+            # Loading and schema change job
+            ret.update(self._getJobs())
+        else:
+            ret = self._ls(graphName)
+            # Additional details of vertex and edge types from REST++
+            ret2 = self.get("/gsqlserver/gsql/schema", {"graph": self.graphName})
+            # TODO Merge
+            # Schema version
+            ret["Version"] = self.get("/graph/" + self.graphName + "/vertices/dummy", resKey="", skipCheck=True)["version"]["schema"]
+            if full:
+                # Queries
+                ret.update(self._getQueries())
+                # Loading and schema change job
+                ret.update(self._getJobs())
+
+        self.graphs[graphName] = ret
 
     # Graphs ===================================================================
 
-    def getGraphs(self):
-        """Returns the names of all graphs in the database."""
-        pass
+    def getGraphs(self, force: bool = False) -> list:
+        """Returns the names of all graphs in the database.
+
+        :param force:
+            If `True`, retrieves the grahp names again, otherwise returns a cached copy of the graph names (if they were already fetched previously).
+        :returns:
+            List of graph names ("GLOBAL" not included).
+        """
+        if not self.graphs or force:
+            self._getGraphs()
+        return list(self.graphs)
 
     def getGraph(self, full=True, force=False):
         """Returns the schema of the current graph (can be global graph).
@@ -386,7 +485,7 @@ class TigerGraphBase(object):
         # TODO: Make it capable to return the schema of any graphs?
         return self.getSchema(full, force)
 
-    def useGraph(self, graphname: str):
+    def useGraph(self, graphName: str):
         """Selects a graph to be used as working graph.
 
         Documentation: https://docs.tigergraph.com/dev/gsql-ref/ddl-and-loading/defining-a-graph-schema#use-graph
@@ -394,7 +493,7 @@ class TigerGraphBase(object):
         :param graphname:
             The name of the graph.
         """
-        self.execute("USE GRAPH " + graphname)
+        self.execute("USE GRAPH " + graphName)
         self.graphName = self.conn.Gsql.graph
 
     def useGlobal(self):
@@ -423,7 +522,7 @@ class TigerGraphBase(object):
 
     # Schema ===================================================================
 
-    def getSchema(self, full: bool = True, force: bool = False) -> dict:
+    def getSchema(self, graphName: str = "", full: bool = True, force: bool = False) -> dict:
         """Returns the schema of the current graph (can be global graph).
 
         :param full:
@@ -436,32 +535,44 @@ class TigerGraphBase(object):
 
         TODO: Investigate "/schema" that returns YAML
         """
-        if not self.schema or force:
-            self.schema = self.get("/gsqlserver/gsql/schema", {"graph": self.graphName})
-            print(self.schema)
-            ret = self.get("/graph/" + self.graphName + "/vertices/dummy", resKey="", skipCheck=True)
-            self.schema["Version"] = ret["version"]["schema"]
-        if full:
-            if "UDTs" not in self.schema or force:
-                self._getUDTs()
-            if "Queries" not in self.schema or force:
-                self._getSchemaLs()
-                self._getQueries()
-            if "Users" not in self.schema or force:
-                self._getUsers()
-            if "Groups" not in self.schema or force:
-                self._getGroups()
-        return self.schema
+        if not graphName:
+            graphName = self.graphName
 
-    def getSchemaVersion(self, force: bool = False) -> int:
+        # Get list of graph names (if necessary)
+        if not self.graphs or force:
+            self._getGraphs()
+
+        # Check validity of graph name
+        if graphName != GLOBAL and graphName not in self.graphs:
+            raise TigerGraphException("Invalid schema name")
+
+        # Always get details global object types
+        if graphName != GLOBAL:
+            if GLOBAL not in self.schemas or force:
+                self._getSchema(graphName, full)
+
+        # Get schema details
+        if graphName not in self.schemas or force:
+            self._getSchema(graphName, full)
+
+        return self.schemas[graphName]
+
+    def getSchemaVersion(self, graphName: str = "", force: bool = False) -> int:
         """Retrieves the schema version.
 
+        :param graphName:
         :param force:
             If `True`, retrieves the schema details again, otherwise returns a cached copy of the schema details (if they were already fetched previously).
         :return:
-            The current version of the schema.
+            The current version of the schema of the graph. None for GLOBAL.
         """
-        return int(self.getSchema(force=force)["Version"])
+        if not graphName:
+            graphName = self.graphName
+        if graphName == GLOBAL:
+            return None  # TODO Should raise exception instead?
+        if not self.graphs or force:
+            self._getGraphs()
+        return int(self.schemas[graphName]["Version"])
 
     # Vertex types =============================================================
 
@@ -568,7 +679,7 @@ class TigerGraphBase(object):
 
     def isTaggable(self, vertexType: str):
         """Is the vertex type marked as taggable?
-        
+
         :param vertexType:
             The name of the vertex type.
         """
@@ -578,25 +689,25 @@ class TigerGraphBase(object):
 
     def getIndices(self) -> list:
         """Returns the list of all index names.
-        
-        :return: 
+
+        :return:
         """
         pass
 
     def getVertexTypeIndices(self, vertexType: str) -> dict:
         """Returns the list of index names defined on a specific vertex type.
-        
+
         :param vertexType:
             The name of the vertex type.
-        :return: 
+        :return:
         """
         pass
 
     def getIndex(self, indexName: str) -> dict:
         """
-        
-        :param indexName: 
-        :return: 
+
+        :param indexName:
+        :return:
         """
         pass
 
@@ -833,27 +944,24 @@ class TigerGraphBase(object):
 
     # User defined types =======================================================
 
-    def getUDTs(self) -> list:
+    def getUDTs(self, force: bool = True) -> list:
         """Returns the list of User Defined Types (names only)."""
-        if "UDTs" not in self.schema:
-            self.getSchema()
-        ret = []
-        for udt in self.schema["UDTs"]:
-            ret.append(udt["name"])
-        return ret
+        if not self.udts or force:
+            self._getUDTs()
+        return list(self.udts.keys())
 
-    def getUDT(self, udtName) -> list:
+    def getUDT(self, udtName, force: bool = True) -> list:
         """Returns the field details of a specific User Defined Type.
 
         :param udtName:
             The name of the User Defined Type.
+        :param force:
         """
-        if "UDTs" not in self.schema:
-            self.getSchema()
-        for udt in self.schema["UDTs"]:
-            if udt["name"] == udtName:
-                return udt["fields"]
-        return []  # UDT was not found
+        if not self.udts or force:
+            self._getUDTs()
+        if udtName in self.udts:
+            return self.udts[udtName]
+        raise TigerGraphException("Invalid UDT name: " + udtName)
 
     # Queries ==================================================================
 
@@ -1029,7 +1137,8 @@ class TigerGraphBase(object):
         Endpoint:      GET /requesttoken
         Documentation: https://docs.tigergraph.com/dev/restpp-api/restpp-requests#requesting-a-token-with-get-requesttoken
         """
-        url = self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + ("&lifetime=" + str(lifetime) if lifetime else "")
+        url = self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + (
+            "&lifetime=" + str(lifetime) if lifetime else "")
         if self.debug:
             print(url)
         res = json.loads(requests.request("GET", url).text)
@@ -1072,7 +1181,9 @@ class TigerGraphBase(object):
         """
         if not token:
             token = self.apiToken
-        res = json.loads(requests.request("PUT", self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + "&token=" + token + ("&lifetime=" + str(lifetime) if lifetime else "")).text)
+        res = json.loads(requests.request("PUT",
+                                          self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + "&token=" + token + (
+                                              "&lifetime=" + str(lifetime) if lifetime else "")).text)
         if not res["error"]:
             exp = time.time() + res["expiration"]
             return res["token"], int(exp), datetime.utcfromtimestamp(exp).strftime('%Y-%m-%d %H:%M:%S')
@@ -1101,7 +1212,8 @@ class TigerGraphBase(object):
         """
         if not token:
             token = self.apiToken
-        res = json.loads(requests.request("DELETE", self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + "&token=" + token).text)
+        res = json.loads(requests.request("DELETE",
+                                          self.url.scheme + "://" + self.url.netloc + ":" + self.restppPort + "/requesttoken?secret=" + secret + "&token=" + token).text)
         if not res["error"]:
             return True
         if res["code"] == "REST-3300" and skipNA:
