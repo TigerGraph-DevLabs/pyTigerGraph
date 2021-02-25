@@ -3,158 +3,148 @@ Created on 7 Apr 2020
 
 @author: szilardbarany
 '''
-# import time
+import traceback
 
 if __name__ == '__main__':
     pass
 
 import json
 import pandas as pd
-from pyTigerGraphBase import TigerGraphBase as tg
+from pyTigerGraphBase import TigerGraphBase as tgB
 
 sep = "-" * 60
 
 
-def pr(fn, res):
-    print(sep)
-    print(fn + "\n")
-    print("==> " + str(type(res)))
-    if isinstance(res, set):
-        print(res)
-    elif isinstance(res, pd.DataFrame):
-        print(pd)
-    else:
-        print(json.dumps(res, indent=4))
+def pr(msg, function, *args, **kwargs):
+    """
 
+    :param msg:
+    :param function:
+    :param args:
+    :param kwargs:
+    """
+    print(sep)
+    print("Function:    " + msg)
+    try:
+        res = function(*args, **kwargs)
+        print("Return type: " + str(type(res)))
+        print()
+        if isinstance(res, set):
+            print(res)
+        elif isinstance(res, pd.DataFrame):
+            print(pd)
+        else:
+            print(json.dumps(res, indent=4))
+    except Exception:
+        print()
+        print(traceback.format_exc())
+
+
+def prx(msg, res):
+    print(sep)
+    print("Function:    " + msg)
+    print()
+    print(json.dumps(res, indent=4))
 
 print("Start\n" + ("-" * 100))
 
-conn = tg(host="http://127.0.0.1", username="tigergraph", password="tigergraph1", restppPort="30900", gsPort="30240", graphname="MyGraph", debug=True)
-# conn = tg(host="http://127.0.0.1", restppPort="31900", gsPort="31240", graphname="nile", debug=True)
-# conn2 = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="26900", gsPort="26240", graphname="FraudGraph",     username="tigergraph", password="tigergraph", apiToken="el1op7a9eqrlq4ape5t452lukv991k7h")
-# conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="25900", gsPort="25240", graphname="g2",             username="tigergraph", password="szilard",    apiToken="kc93as8gdaqcbjvl30o8jvv5flufmtvn")
-# conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort=25900,   gsPort=25240,   graphname="cre_evaluation", username="tigergraph", password="tigergraph", apiToken="2aa016d747ede9gg6da4drslm98srfoj")
-# conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="26900", gsPort="26240", graphname="g1",             username="tigergraph", password="tigergraph", apiToken="jbfnd75e078fl2qco3bi388ipsdequpa")
-# conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="9000",  gsPort="14240", graphname="FraudGraph",     username="tigergraph", password="tigergraph", apiToken="jbfnd75e078fl2qco3bi388ipsdequpa")
-
-# JLR
-# conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="9001",  gsPort="14241")
-
-# conn = tg.TigerGraphConnection(host="http://127.0.0.1", graphname="o2")
-
-
-# conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="9002",  gsPort="14242", graphname="FraudGraph",     username="tigergraph", password="tigergraph", apiToken="jbfnd75e078fl2qco3bi388ipsdequpa")
-# conn = tg.TigerGraphConnection(host="http://127.0.0.1", restppPort="9003",  gsPort="14243", graphname="FraudGraph",     username="tigergraph", password="tigergraph", apiToken="jbfnd75e078fl2qco3bi388ipsdequpa")
-# conn = tg.TigerGraphConnection(host="http://3.11.137.68", graphname="MyGraph", username="tigergraph", password="tigergraph", apiToken="0ufdk3ufpjatao1hmm1ogifjei2kmr76")
-# conn = tg.TigerGraphConnection(host="https://szb-covid19.i.tgcloud.io", useCert=True)
-# token = conn.getToken("cmkfcms8k6sgj5gcssv2fhbp4gh12oh3")
-
+conn = tgB(host="http://127.0.0.1", username="tigergraph", password="tigergraph1", restppPort="30900", gsPort="30240", graphname="MyGraph", debug=True)
 # conn = tg.TigerGraphBase(host="https://szbtg-test.i.tgcloud.io", graphname="test", useCert=True)
+
 token = conn.getToken("7dcavgjrsouqinebukfek4cu15a1e3ac")
+# pr("getCurrentTokens()", conn.getCurrentTokens)
+# pr("getCurrentGraph()", conn.getCurrentGraph)
+
 # print(token)
+# conn.getToken("2g7scij43oqfdc5oespbdg3p9guei3l5", "geo_pogo")
+# pr("getCurrentTokens()", conn.getCurrentTokens)
+# pr("getCurrentGraph()", conn.getCurrentGraph)
 
+conn.getToken("dfl156tq588hqb5d6i3pdb55mgfbbjch", "abc")
 
-# conn = tg.TigerGraphConnection(host="https://4eee9546b4c54934bfcefb7c990674a0.i.tgcloud.io", useCert=True)
-# conn.getToken("00ovojicm57lq7bedjgobjmbu3g6fvke")
-
-
-# token = tg.TigerGraphConnection(host="https://szbtest.i.tgcloud.io/", graphname="MyGraph").getToken("p61cmnh2lqbkp5ra5n82ikm1htpm0jfb","26000000")[0]
-# print(token)
-
-# conn = tg.TigerGraphConnection(graphname="test")
-# conn = tg.TigerGraphConnection(graphname="MyGraph", username="tigergraph", password="tigergraph1", apiToken="i62rubrfd7hfims9riq64jlm0bnm09nu", useCert=False)
-# conn = tg.TigerGraphConnection(graphname="test", username="tigergraph", password="tigergraph1", apiToken="5r8fe30654o83f6qv8du0d6fuqmr7nvi", useCert=False)
-# conn = tg.TigerGraphConnection(graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9005",  gsPort="14245", useCert=False)
-# conn = tg.TigerGraphConnection(graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9001",  gsPort="14241", useCert=False)
-
-# conn = tg.TigerGraphConnection()
-
-conn.debug = True
-# conn2.debug = True
-# conn3.debug = True
 
 # Graph related functions ======================================================
 
-# pr("getGraphs()", conn.getGraphs())
+# pr("getGraphs()", conn.getGraphs)
+
+
+# pr("getGraph()", conn.getGraph)
+# conn.useGlobal()
+# pr("getGraph()", conn.getGraph)
+# pr("getGraph()", conn.getGraph, ("GLOBAL"))
+# pr("getGraph()", conn.getGraph, ("geo_pogo"))
+# grs = conn.getGraphs()
+# if grs:
+#     pr("getGraph()", conn.getGraph, (grs[0]))
+
+# pr("getCurrentGraph()", conn.getCurrentGraph)
+# pr("useGraph(abc)", conn.useGraph, ("abc"))
+# pr("getCurrentGraph()", conn.getCurrentGraph)
+# pr("useGlobal()", conn.useGlobal)
+# pr("getCurrentGraph()", conn.getCurrentGraph)
+# pr("useGraph(MyGraph)", conn.useGraph, ("MyGraph"))
+# pr("getCurrentGraph()", conn.getCurrentGraph)
+# pr("useGraph(GLOBAL)", conn.useGraph, ("GLOBAL"))
+# pr("getCurrentGraph()", conn.getCurrentGraph)
+# pr("useGraph(MyGraph)", conn.useGraph, ("MyGraph"))
+# pr("getCurrentGraph()", conn.getCurrentGraph)
+# pr("useGraph(invalid)", conn.useGraph, ("invalid"))
+# pr("getCurrentGraph()", conn.getCurrentGraph)
+
 # Schema related functions =====================================================
 
 # Get schema metadata
-# pr("getSchema()", conn.getSchema())
-# pr("getSchema()", conn.getSchema(False))
-# pr("getSchema()", conn.getSchema(udts=False))
-# pr("getSchemaVersion()", conn.getSchemaVersion())
+# pr("getSchema()", conn.getSchema, ("abc"))
 
-pr("LS", conn.execute("LS"))
-
-# Get Used Defined Types
-# pr("getUDTs", conn.getUDTs())
-
-# Get the description of a specific UDT
-# pr("getUDT", conn.getUDT("sizyTuple"))
-# pr("getUDT", conn.getUDT("bingo"))
-
-# Upsert data
-# pr("upsertData()", conn.upsertData('{"vertices": {"dwarfs": {"150": {"name": {"value": "Doc"}, "age": {"value": 60}}, "151": {"name": {"value": "Dopey"}, "age": {"value": 48}}, "152": {"name": {"value": "Bashful"}, "age": {"value": 58}}, "153": {"name": {"value": "Grumpy"}, "age": {"value": 49}}}}}'))
-# pr("upsertData()", conn.upsertData({"vertices": {"dwarfs": {"150": {"name": {"value": "Doc"}, "age": {"value": 60}}, "151": {"name": {"value": "Dopey"}, "age": {"value": 48}}, "152": {"name": {"value": "Bashful"}, "age": {"value": 58}}, "153": {"name": {"value": "Grumpy"}, "age": {"value": 49}}}}}))
+# Get schema version
+# pr("getSchemaVersion()", conn.getSchemaVersion)
 
 # Vertex related functions =====================================================
 
 # Get vertex types
-# pr("getVertexTypes", conn.getVertexTypes())
-# pr("getVertexTypes", conn.getVertexTypes(force=True))
+conn.getGraph()
+# conn.useGlobal()
+# pr("getVertexTypes", conn.getVertexTypes)
+# pr("getVertexTypes", conn.getVertexTypes, (True))
 
-# Get the description of a specific vertex type
-# pr("getVertexType()", conn.getVertexType("dwarfs"))
-# pr("getVertexType(\"<invalid>\")", conn.getVertexType("<invalid>"))
+# vts = conn.getVertexTypes()
+# if vts:
+    # Get the description of a specific vertex type
+    # pr("getVertexType()", conn.getVertexType, (vts[0]))
+    # pr("getVertexType(\"<invalid>\")", conn.getVertexType, ("<invalid>"))
 
-# Get vertex count [with filtering]
-# pr("getVertexCount", conn.getVertexCount("User"))
-# pr("getVertexCount(\"User\")", conn.getVertexCount("v1"))
-# pr("getVertexCount", conn.getVertexCount("*", "trust_score>0.5"))
-# pr("getVertexCount(\"User\",\"trust_score>0.5\")", conn.getVertexCount("User", "trust_score>0.5"))
+    # Get vertex count [with filtering]
+    # pr("getVertexCount()", conn.getVertexCount, (vts[0]))
 
-# Upsert vertex
-# pr("upsertVertex()", conn.upsertVertex("Patient", 100, {"name": "Smaug", "age": 4000}))
-# pr("upsertVertex()", conn.upsertVertex("Dummy", 100, {}))
-# pr("upsertVertex()", conn.upsertVertex("Boole", 100, {"logik": True}))
-# pr("upsertVertex()", conn.upsertVertex("dwarfs", 100, {"name": ("Smaug", "+"), "age": (42, "+")}))
-# pr("upsertVertex()", conn.upsertVertex("dwarfs", 2, {"age": (99, "<")}))
-# pr("upsertVertex()", conn.upsertVertex("dwarfs", 2, {"age": (1000, "+")}))
-# pr("upsertVertex()", conn.upsertVertex("os_type", "szilard's os", {"name": "commodore 64"}))
-# pr("upsertVertex()", conn.upsertVertices("v4",[
-#   (50, {"attr2": "Doc",     "attr1": 60}),
-#   (51, {"attr2": "Dopey",   "attr1": 48}),
-#   (52, {"attr2": "Bashful", "attr1": 58}),
-#   (53, {"attr2": "Grumpy",  "attr1": 49})
-#   ]))
+# pr("getVertexCount(*)", conn.getVertexCount, ("*"))
+# prx("getVertexCount", conn.getVertexCount("Patient", "birth_year>2000"))
 
-# pr("upsertVertex", conn.upsertVertex("Zipcode", "Test1", {}))
-
-# Get vertices
-# pr("getVertices()", conn.getVertices("journey", select="end_dtm", limit=5, sort="-end_dtm"))
-# pr("getVertices()", conn.getVertices("Province"))
-# pr("getVertices()", conn.getVertices("Province", "population", "population<2000000", "population", 5))
-# pr("getVertices(\"User\", where=\"trust_score>0.6\"))", conn.getVertices("User", where="trust_score>0.6"))
-# pr("getVertices(\"User\", limit=5))", conn.getVertices("User", limit=5))
-# pr("getVertices(\"SAR\", sort=\"status\"))", conn.getVertices("SAR", sort="status"))
-# pr("getVertices()", conn.getVertices("v2", sort="prop1"))
-# pr("getVertices(\"User\", select=\"mobile,trust_score\", where=\"trust_score>0.5\", limit=5, sort=\"trust_score\")", conn.getVertices("User", select="mobile,trust_score", where="trust_score>0.5", limit=5, sort="trust_score"))
-# pr("getVerticesById", conn.getVerticesById("City", "Busan"))
-# pr("getVerticesById", conn.getVerticesById("City", ["Bucheon-si","Daedeok-gu"]))
+# pr("getVertexCount(*)", conn.getVertexCount, ("*"))
+# conn.useGraph("abc")
+# pr("getVertexCount(*)", conn.getVertexCount, ("*"))
+# conn.useGraph("MyGraph")
+# pr("getVertexCount(*)", conn.getVertexCount, ("*"))
 
 # Get vertex stats
-# pr("getVertexStats()", conn.getVertexStats("*"))
+# if vts:
+#     pr("getVertexStats()", conn.getVertexStats, (vts[0]))
+# pr("getVertexStats()", conn.getVertexStats, ("*"))
+# conn.useGraph("abc")
+# pr("getVertexStats()", conn.getVertexStats, ("*"))
+# conn.useGraph("MyGraph")
+# pr("getVertexStats()", conn.getVertexStats, ("*"))
+# conn.useGlobal()
+# pr("getVertexStats()", conn.getVertexStats, ("*"))
+# prx("getVertexStats()", conn.getVertexStats("*", skipNA=True))
 
-# Delete vertices
-# pr("delVerticesById", conn.delVerticesById("dwarfs", "1"))
-# pr("delVerticesById", conn.delVerticesById("dwarfs", ["3", "4", "5"]))
-# pr("delVerticesById", conn.delVerticesById("dwarfs", 2))
-# pr("delVerticesById", conn.delVerticesById("dwarfs", [6, 7, 8]))
-# pr("delVerticesById", conn.delVerticesById("dwarfs", "perm", True, 1000))
-# pr("delVertices", conn.delVertices("v1", "attr1<50"))
-# pr("delVertices", conn.delVertices("dwarfs", "age>100"))
-# pr("delVertices", conn.delVertices("dwarfs", limit=3, sort="age"))
-# pr("delVerticesByType", conn.delVerticesByType("v1", ack="none"))
+# TODO: isTaggable()
+
+# Index related functions ======================================================
+
+# pr("getIndices()", conn.getIndices)
+ixs = conn.getIndices()
+if ixs:
+    pr("getIndex()", conn.getIndex, (ixs[0]))
 
 # Edge related functions =======================================================
 
@@ -230,6 +220,16 @@ pr("LS", conn.execute("LS"))
 # pr("delEdges", conn.delEdges("v1", "17", "e1"))
 # pr("delEdges", conn.delEdges("v1", "9", "e1", "v1", 15))
 # pr("delEdges", conn.delEdges("v2", "20d"))
+
+# UDT related functions ========================================================
+
+# Get Used Defined Types
+# pr("getUDTs", conn.getUDTs)
+
+# Get the description of a specific UDT
+# udts = conn.getUDTs()
+# if udts:
+#     pr("getUDT", conn.getUDT, (udts[0]))
 
 # Query related functions =======================================================
 
@@ -343,26 +343,25 @@ pr("LS", conn.execute("LS"))
 # pr("getLoadingJobs()", conn.getLoadingJobs())
 
 # pr("startLoadingJob()", conn.startLoadingJob("fslj1", ("f", "file", "smalldata.csv")))
-"""
-res = conn.startLoadingJob("s3lj1")
+
+# res = conn.startLoadingJob("s3lj1")
 # res = conn.startLoadingJob("fslj1", ("f", "file", "newdata.csv"))
-pr("startLoadingJob()", res)
-
-time.sleep(1)
-pr("getLoadingJobStatus()", conn.getLoadingJobStatus(res["jobId"]))
-
-time.sleep(1)
-pr("pauseLoadingJob()", conn.pauseLoadingJob(res["jobId"]))
-pr("getLoadingJobStatus()", conn.getLoadingJobStatus(res["jobId"]))
-
-time.sleep(60)
-pr("resumeLoadingJob()", conn.resumeLoadingJob(res["jobId"]))
-pr("getLoadingJobStatus()", conn.getLoadingJobStatus(res["jobId"]))
-
-time.sleep(1)
-# pr("stopLoadingJob()", conn.stopLoadingJob(res["jobId"]))
-pr("getLoadingJobStatus()", conn.getLoadingJobStatus(res["jobId"]))
-"""
+# pr("startLoadingJob()", res)
+#
+# time.sleep(1)
+# pr("getLoadingJobStatus()", conn.getLoadingJobStatus(res["jobId"]))
+#
+# time.sleep(1)
+# pr("pauseLoadingJob()", conn.pauseLoadingJob(res["jobId"]))
+# pr("getLoadingJobStatus()", conn.getLoadingJobStatus(res["jobId"]))
+#
+# time.sleep(60)
+# pr("resumeLoadingJob()", conn.resumeLoadingJob(res["jobId"]))
+# pr("getLoadingJobStatus()", conn.getLoadingJobStatus(res["jobId"]))
+#
+# time.sleep(1)
+# # pr("stopLoadingJob()", conn.stopLoadingJob(res["jobId"]))
+# pr("getLoadingJobStatus()", conn.getLoadingJobStatus(res["jobId"]))
 
 # pr("clearGraphStore()", conn.clearGraphStore())
 # pr("getVertexTypes", conn.getVertexTypes())
