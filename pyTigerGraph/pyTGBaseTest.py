@@ -46,12 +46,16 @@ def prx(msg, res):
     print()
     print(json.dumps(res, indent=4))
 
+
 print("Start\n" + ("-" * 100))
 
-conn = tgB(host="http://127.0.0.1", username="tigergraph", password="tigergraph1", restppPort="30900", gsPort="30240", graphname="MyGraph", debug=True)
+# conn = tgB(host="http://127.0.0.1", username="tigergraph", password="tigergraph1", restppPort="31900", gsPort="31240", graphname="MyGraph",
+#     secret="ljhrnahjgk5c8hoji67n1pnp4i65sp77", debug=True)
+conn = tgB(host="http://127.0.0.1", username="tigergraph", password="tigergraph", restppPort="31900", gsPort="31240", graphname="MyGraph",
+    debug=True)
 # conn = tg.TigerGraphBase(host="https://szbtg-test.i.tgcloud.io", graphname="test", useCert=True)
 
-token = conn.getToken("7dcavgjrsouqinebukfek4cu15a1e3ac")
+# token = conn.getToken("7dcavgjrsouqinebukfek4cu15a1e3ac")
 # pr("getCurrentTokens()", conn.getCurrentTokens)
 # pr("getCurrentGraph()", conn.getCurrentGraph)
 
@@ -60,7 +64,7 @@ token = conn.getToken("7dcavgjrsouqinebukfek4cu15a1e3ac")
 # pr("getCurrentTokens()", conn.getCurrentTokens)
 # pr("getCurrentGraph()", conn.getCurrentGraph)
 
-conn.getToken("dfl156tq588hqb5d6i3pdb55mgfbbjch", "abc")
+# conn.getToken("dfl156tq588hqb5d6i3pdb55mgfbbjch", "abc")
 
 
 # Graph related functions ======================================================
@@ -94,7 +98,14 @@ conn.getToken("dfl156tq588hqb5d6i3pdb55mgfbbjch", "abc")
 # Schema related functions =====================================================
 
 # Get schema metadata
-# pr("getSchema()", conn.getSchema, ("abc"))
+# pr("getSchema()", conn.getSchema)
+
+pr("useGraph(g1)", conn.useGraph, ("g1"))
+# pr("getSchema()", conn.getSchema)
+pr("useGraph(global)", conn.useGraph, ("global"))
+# pr("getSchema()", conn.getSchema)
+pr("useGraph(global)", conn.useGraph, ("hiwe"))
+# pr("getSchema()", conn.getSchema)
 
 # Get schema version
 # pr("getSchemaVersion()", conn.getSchemaVersion)
@@ -102,19 +113,19 @@ conn.getToken("dfl156tq588hqb5d6i3pdb55mgfbbjch", "abc")
 # Vertex related functions =====================================================
 
 # Get vertex types
-conn.getGraph()
+# conn.getGraph()
 # conn.useGlobal()
 # pr("getVertexTypes", conn.getVertexTypes)
 # pr("getVertexTypes", conn.getVertexTypes, (True))
 
 # vts = conn.getVertexTypes()
 # if vts:
-    # Get the description of a specific vertex type
-    # pr("getVertexType()", conn.getVertexType, (vts[0]))
-    # pr("getVertexType(\"<invalid>\")", conn.getVertexType, ("<invalid>"))
+# Get the description of a specific vertex type
+# pr("getVertexType()", conn.getVertexType, (vts[0]))
+# pr("getVertexType(\"<invalid>\")", conn.getVertexType, ("<invalid>"))
 
-    # Get vertex count [with filtering]
-    # pr("getVertexCount()", conn.getVertexCount, (vts[0]))
+# Get vertex count [with filtering]
+# pr("getVertexCount()", conn.getVertexCount, (vts[0]))
 
 # pr("getVertexCount(*)", conn.getVertexCount, ("*"))
 # prx("getVertexCount", conn.getVertexCount("Patient", "birth_year>2000"))
@@ -224,12 +235,12 @@ if ixs:
 # UDT related functions ========================================================
 
 # Get Used Defined Types
-# pr("getUDTs", conn.getUDTs)
+pr("getUDTs", conn.getUDTs)
 
 # Get the description of a specific UDT
-# udts = conn.getUDTs()
-# if udts:
-#     pr("getUDT", conn.getUDT, (udts[0]))
+udts = conn.getUDTs()
+if udts:
+    pr("getUDT", conn.getUDT, (udts[0]))
 
 # Query related functions =======================================================
 
