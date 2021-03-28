@@ -9,7 +9,8 @@ from pyTigerGraph import TigerGraphBase, TigerGraphException
 class TigerGraphConnection(TigerGraphBase):
     """Python wrapper for TigerGraph's REST++ and GSQL APIs, mostly for analytics/data science."""
 
-    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9000", gsPort="14240", apiToken="", gsqlVersion="", tgPath="", useCert=False, certPath="", debug=False):
+    def __init__(self, host="http://localhost", graphname="MyGraph", username="tigergraph", password="tigergraph", restppPort="9000", gsPort="14240",
+            apiToken="", gsqlVersion="", tgPath="", useCert=False, certPath="", debug=False):
         """Initiate a connection object.
 
         :param str host:
@@ -80,6 +81,11 @@ class TigerGraphConnection(TigerGraphBase):
     def upsertVertex(self, vertexType, vertexId, attributes=None):
         """Upserts a vertex.
 
+        :param str vertexType: The name of the vertex type.
+        :param {str|int} vertexId: The primary ID of the vertex type instance.
+        :param {dict} attributes: The attributes of the vertex type instance.
+        :returns: A single number of accepted (successfully upserted) vertices (0 or 1).
+
         Data is upserted:
         - If vertex is not yet present in graph, it will be created.
         - If it's already in the graph, its attributes are updated with the values specified in the request. An optional operator controls how the attributes are updated.
@@ -91,8 +97,6 @@ class TigerGraphConnection(TigerGraphBase):
             {"name": "Thorin", points: (10, "+"), "bestScore": (67, "max")}
 
         For valid values of <operator> see: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#post-graph-graph_name-upsert-the-given-data
-
-        Returns a single number of accepted (successfully upserted) vertices (0 or 1).
 
         Endpoint:      POST /graph
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#post-graph-graph_name-upsert-the-given-data
@@ -108,6 +112,10 @@ class TigerGraphConnection(TigerGraphBase):
 
         See the description of `upsertVertex` for generic information.
 
+        :param str vertexType: The name of the vertex type.
+        :param list vertices: A list of vertex instance details.
+        :returns: A single number of accepted (successfully upserted) vertices (0 or positive integer).
+
         The `vertices` argument is expected to be a list of tuples in this format:
             [
                 (<vertex_id>, {<attribute_name>, <attribute_value>|(<attribute_name>, <operator>), …}),
@@ -120,12 +128,10 @@ class TigerGraphConnection(TigerGraphBase):
                (3, {"name": "Dwalin", "points": (7, "+"), "bestScore": (35, "max")})
             ]
 
-        For valid values of <operator> see: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#post-graph-graph_name-upsert-the-given-data
-
-        Returns a single number of accepted (successfully upserted) vertices (0 or positive integer).
+        For valid values of <operator> see: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#operation-codes
 
         Endpoint:      POST /graph
-        Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#post-graph-graph_name-upsert-the-given-data
+        Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#upsert-data-to-graph
         """
         if not isinstance(vertices, list):
             return None
@@ -136,19 +142,15 @@ class TigerGraphConnection(TigerGraphBase):
         data = json.dumps({"vertices": {vertexType: data}})
         return self.conn.post("/graph/" + self.graphname, data=data)[0]["accepted_vertices"]
 
-    def getVertices(self, vertexType, select="", where="", limit="", sort="", fmt="py", withId=True, withType=False, timeout=0):
+    def getVertices(self, vertexType, select="", where="", sort="", limit="", fmt="py", withId=True, withType=False, timeout=0):
         """Retrieves vertices of the given vertex type.
 
         Arguments:
         - `select`:   Comma separated list of vertex attributes to be retrieved or omitted.
-                      See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#select
         - `where`:    Comma separated list of conditions that are all applied on each vertex' attributes.
                       The conditions are in logical conjunction (i.e. they are "AND'ed" together).
-                      See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#filter
-        - `limit`:    Maximum number of vertex instances to be returned (after sorting).
-                      See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#limit
         - `sort`:     Comma separated list of attributes the results should be sorted by.
-                      See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#sort
+        - `limit`:    Maximum number of vertex instances to be returned (after sorting).
         - `fmt`:      Format of the results:
                       "py":   Python objects (default)
                       "json": JSON document
@@ -160,8 +162,8 @@ class TigerGraphConnection(TigerGraphBase):
         NOTE: The primary ID of a vertex instance is NOT an attribute, thus cannot be used in above arguments.
               Use `getVerticesById` if you need to retrieve by vertex ID.
 
-        Endpoint:      GET /graph/{graph_name}/vertices
-        Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-graph-graph_name-vertices
+        Endpoint:      GET /graph/{graph_name}/vertices/{vertex_type}
+        Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#list-vertices
         """
         url = "/graph/" + self.graphname + "/vertices/" + vertexType
         isFirst = True
@@ -171,11 +173,11 @@ class TigerGraphConnection(TigerGraphBase):
         if where:
             url += ("?" if isFirst else "&") + "filter=" + where
             isFirst = False
-        if limit:
-            url += ("?" if isFirst else "&") + "limit=" + str(limit)
-            isFirst = False
         if sort:
             url += ("?" if isFirst else "&") + "sort=" + sort
+            isFirst = False
+        if limit:
+            url += ("?" if isFirst else "&") + "limit=" + str(limit)
             isFirst = False
         if timeout and timeout > 0:
             url += ("?" if isFirst else "&") + "timeout=" + str(timeout)
@@ -188,12 +190,12 @@ class TigerGraphConnection(TigerGraphBase):
             return self.vertexSetToDataFrame(ret, withId, withType)
         return ret
 
-    def getVertexDataframe(self, vertexType, select="", where="", limit="", sort="", timeout=0):
+    def getVertexDataframe(self, vertexType, select="", where="", sort="", limit="", timeout=0):
         """Retrieves vertices of the given vertex type and returns them as Pandas DataFrame.
 
         For details on arguments see `getVertices` above.
         """
-        return self.getVertices(vertexType, select=select, where=where, limit=limit, sort=sort, fmt="df", withId=True, withType=False, timeout=timeout)
+        return self.getVertices(vertexType, select=select, where=where, sort=sort, limit=limit, fmt="df", withId=True, withType=False, timeout=timeout)
 
     def getVerticesById(self, vertexType, vertexIds, fmt="py", withId=True, withType=False):
         """Retrieves vertices of the given vertex type, identified by their ID.
@@ -208,8 +210,8 @@ class TigerGraphConnection(TigerGraphBase):
         - `withType`: (If the output format is "df") should the vertex type be included in the dataframe?
         - `timeout`:  Time allowed for successful execution (0 = no limit, default).
 
-        Endpoint:      GET /graph/{graph_name}/vertices
-        Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-graph-graph_name-vertices
+        Endpoint:      GET /graph/{graph_name}/vertices/{vertex_type}/{vertex_id}
+        Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#retrieve-a-vertex
         """
         if not vertexIds:
             raise TigerGraphException("No vertex ID was specified.", None)
@@ -239,19 +241,19 @@ class TigerGraphConnection(TigerGraphBase):
         """
         return self.getVerticesById(vertexType, vertexIds, fmt="df", withId=True, withType=False)
 
-    def delVertices(self, vertexType, where="", limit="", sort="", permanent=False, timeout=0):
+    def delVertices(self, vertexType, where="", sort="", limit="", permanent=False, timeout=0):
         """Deletes vertices from graph.
 
         Arguments:
         - `where`:     Comma separated list of conditions that are all applied on each vertex' attributes.
                        The conditions are in logical conjunction (i.e. they are "AND'ed" together).
                        See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#filter
-        - `limit`:     Maximum number of vertex instances to be returned (after sorting).
-                       See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#limit
-                       Must be used with `sort`.
         - `sort`:      Comma separated list of attributes the results should be sorted by.
                        See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#sort
                        Must be used with `limit`.
+        - `limit`:     Maximum number of vertex instances to be returned (after sorting).
+                       See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#limit
+                       Must be used with `sort`.
         - `permanent`: If true, the deleted vertex IDs can never be inserted back, unless the graph is dropped or the graph store is cleared.
         - `timeout`:   Time allowed for successful execution (0 = no limit, default).
 
@@ -394,32 +396,36 @@ class TigerGraphConnection(TigerGraphBase):
         data = json.dumps({"edges": data})
         return self.conn.post("/graph/" + self.graphname, data=data)[0]["accepted_edges"]
 
-    def getEdges(self, sourceVertexType, sourceVertexId, edgeType=None, targetVertexType=None, targetVertexId=None, select="", where="", limit="", sort="", fmt="py", withId=True, withType=False, timeout=0):
+    def getEdges(self, sourceVertexType, sourceVertexId, edgeType=None, targetVertexType=None, targetVertexId=None, select="", where="", sort="", limit="",
+            fmt="py", withId=True, withType=False, timeout=0):
         """Retrieves edges of the given edge type originating from a specific source vertex.
 
         Only `sourceVertexType` and `sourceVertexId` are required.
         If `targetVertexId` is specified, then `targetVertexType` must also be specified.
         If `targetVertexType` is specified, then `edgeType` must also be specified.
 
-        Arguments:
-        - `select`:   Comma separated list of edge attributes to be retrieved or omitted.
-                      See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#select
-        - `where`:    Comma separated list of conditions that are all applied on each edge's attributes.
-                      The conditions are in logical conjunction (i.e. they are "AND'ed" together).
-                      See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#filter
-        - `limit`:    Maximum number of edge instances to be returned (after sorting).
-                      See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#limit
-        - `sort`:     Comma separated list of attributes the results should be sorted by.
-                      See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#sort
-        - `fmt`:      Format of the results:
-                      "py":   Python objects (default)
-                      "json": JSON document
-                      "df":   Pandas DataFrame
-        - `withId`:   (If the output format is "df") should the source and target vertex types and IDs be included in the dataframe?
-        - `withType`: (If the output format is "df") should the edge type be included in the dataframe?
-        - `timeout`:  Time allowed for successful execution (0 = no limit, default).
+        :param {string} select:
+            Comma separated list of edge attributes to be retrieved or omitted.
+        :param {string} where:
+            Comma separated list of conditions that are all applied on each edge's attributes. The conditions are in logical conjunction (i.e. they are "AND'ed" together).
+        :param {string} sort:
+            Comma separated list of attributes the results should be sorted by.
+        :param {string} limit:
+            Maximum number of edge instances to be returned (after sorting).
+        :param {string} fmt:
+            Format of the results:
+             - "py":   Python objects (default)
+             - "json": JSON document
+             - "df":   Pandas DataFrame
+        :param {string} withId:
+            (If the output format is "df") should the source and target vertex types and IDs be included in the dataframe?
+        :param {string} withType:
+            (If the output format is "df") should the edge type be included in the dataframe?
+        :param {string} timeout:
+            Time allowed for successful execution (0 = no limit, default).
 
-        Endpoint:      GET /graph/{graph_name}/vertices
+        Endpoint:      `GET /graph/{graph_name}/vertices`
+
         Documentation: https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-graph-graph_name-edges
         """
         # TODO: change sourceVertexId to sourceVertexIds and allow passing both number and list as parameter
@@ -455,12 +461,14 @@ class TigerGraphConnection(TigerGraphBase):
             return self.edgeSetToDataFrame(ret, withId, withType)
         return ret
 
-    def getEdgesDataframe(self, sourceVertexType, sourceVertexId, edgeType=None, targetVertexType=None, targetVertexId=None, select="", where="", limit="", sort="", timeout=0):
+    def getEdgesDataframe(self, sourceVertexType, sourceVertexId, edgeType=None, targetVertexType=None, targetVertexId=None, select="", where="", limit="",
+            sort="", timeout=0):
         """Retrieves edges of the given edge type originating from a specific source vertex.
 
         For details on arguments see `getEdges` above.
         """
-        return self.getEdges(sourceVertexType, sourceVertexId, edgeType, targetVertexType, targetVertexId, select, where, limit, sort, fmt="df", timeout=timeout)
+        return self.getEdges(sourceVertexType, sourceVertexId, edgeType, targetVertexType, targetVertexId, select, where, limit, sort, fmt="df",
+            timeout=timeout)
 
     def getEdgesByType(self, edgeType, fmt="py", withId=True, withType=False):
         """Retrieves edges of the given edge type regardless the source vertex.
@@ -510,9 +518,9 @@ class TigerGraphConnection(TigerGraphBase):
                     PRINT @@edges AS edges; \
              }'
 
-            queryText = queryText.replace("$graph",          self.graphname) \
-                                 .replace('$sourceEdgeType', sourceVertexType[0]) \
-                                 .replace('$edgeType',       edgeType)
+            queryText = queryText.replace("$graph", self.graphname) \
+                .replace('$sourceEdgeType', sourceVertexType[0]) \
+                .replace('$edgeType', edgeType)
             ret = self.runInterpretedQuery(queryText)
         ret = ret[0]["edges"]
 
@@ -524,7 +532,7 @@ class TigerGraphConnection(TigerGraphBase):
 
     # TODO: getEdgesDataframeByType
 
-    def delEdges(self, sourceVertexType, sourceVertexId, edgeType=None, targetVertexType=None, targetVertexId=None, where="", limit="", sort="", timeout=0):
+    def delEdges(self, sourceVertexType, sourceVertexId, edgeType=None, targetVertexType=None, targetVertexId=None, where="", sort="", limit="", timeout=0):
         """Deletes edges from the graph.
 
         Only `sourceVertexType` and `sourceVertexId` are required.
@@ -535,10 +543,10 @@ class TigerGraphConnection(TigerGraphBase):
         - `where`:   Comma separated list of conditions that are all applied on each edge's attributes.
                      The conditions are in logical conjunction (i.e. they are "AND'ed" together).
                      See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#filter
-        - `limit`:   Maximum number of edge instances to be returned (after sorting).
-                     See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#limit
         - `sort`     Comma separated list of attributes the results should be sorted by.
                      See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#sort
+        - `limit`:   Maximum number of edge instances to be returned (after sorting).
+                     See https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#limit
         - `timeout`: Time allowed for successful execution (0 = no limit, default).
 
         Returns a dictionary of <edge_type>: <deleted_edge_count> pairs.
@@ -819,7 +827,7 @@ class TigerGraphConnection(TigerGraphBase):
         return json.dumps(data)
 
     def shortestPath(self, sourceVertices, targetVertices, maxLength=None, vertexFilters=None, edgeFilters=None, allShortestPaths=False):
-        """Find the shortest path (or all shortest paths) between the source and target vertex sets.
+        """Finds the shortest path (or all shortest paths) between the source and target vertex sets.
 
         Arguments:
         - `sourceVertices`:   A vertex set (a list of vertices) or a list of (vertexType, vertexID) tuples; the source vertices of the shortest paths sought.
@@ -839,7 +847,7 @@ class TigerGraphConnection(TigerGraphBase):
         return self.conn.post("/shortestpath/" + self.graphname, data=data)
 
     def allPaths(self, sourceVertices, targetVertices, maxLength, vertexFilters=None, edgeFilters=None):
-        """Find all possible paths up to a given maximum path length between the source and target vertex sets.
+        """Finds all possible paths up to a given maximum path length between the source and target vertex sets.
 
         Arguments:
         - `sourceVertices`:   A vertex set (a list of vertices) or a list of (vertexType, vertexID) tuples; the source vertices of the shortest paths sought.
@@ -972,13 +980,12 @@ class TigerGraphConnection(TigerGraphBase):
         json_up = []
 
         for index in df.index:
-
             json_up.append(json.loads(df.loc[index].to_json()))
             json_up[-1] = (
                 index if v_id is None else json_up[-1][v_id],
                 json_up[-1] if attributes is None
                 else {target: json_up[-1][source]
-                      for target, source in attributes.items()}
+                    for target, source in attributes.items()}
             )
 
         return self.upsertVertices(vertexType=vertexType, vertices=json_up)
@@ -1006,14 +1013,13 @@ class TigerGraphConnection(TigerGraphBase):
         json_up = []
 
         for index in df.index:
-
             json_up.append(json.loads(df.loc[index].to_json()))
             json_up[-1] = (
                 index if from_id is None else json_up[-1][from_id],
                 index if to_id is None else json_up[-1][to_id],
                 json_up[-1] if attributes is None
                 else {target: json_up[-1][source]
-                      for target, source in attributes.items()}
+                    for target, source in attributes.items()}
             )
 
         return self.upsertEdges(sourceVertexType=sourceVertexType, edgeType=edgeType, targetVertexType=targetVertexType, edges=json_up)

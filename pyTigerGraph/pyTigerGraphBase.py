@@ -44,7 +44,7 @@ def nvl(val) -> str:
 
     :param val:
         A value of any type.
-    :return:
+    :returns:
         Stringified value or 'None' if value is None.
     """
     if not val:
@@ -201,7 +201,7 @@ class TigerGraphBase(object):
         Preferably do not use this function if there is an equivalent pyTigerGraph function for it.
 
         :param query:
-        :return:
+        :returns:
         """
         self.log.debug("execute(" + nvl(query) + ")")
 
@@ -217,7 +217,7 @@ class TigerGraphBase(object):
             Type of the object.
         :param objName:
             The name of the object.
-        :return:
+        :returns:
             The metadata of the object (if found; None otherwise).
         """
         self.log.debug("_getGlobal(" + nvl(objType) + ", " + nvl(objName) + ")")
@@ -393,7 +393,7 @@ class TigerGraphBase(object):
         """
         Returns a list of tag names defined in the graph.
 
-        :return:
+        :returns:
         """
         self.log.debug("_getTags()")
 
@@ -512,7 +512,7 @@ class TigerGraphBase(object):
         Retrieves schema metadata from various sources.
 
         :param global_:
-        :return:
+        :returns:
         """
         self.log.debug("_getSchema(" + nvl(global_) + ")")
 
@@ -681,7 +681,7 @@ class TigerGraphBase(object):
         """
         Returns the name of the current graph.
 
-        :return:
+        :returns:
             The name of the graph currently in use (could be GLOBAL)
         """
         self.log.debug("getCurrentGraph()")
@@ -719,7 +719,7 @@ class TigerGraphBase(object):
         """
         Retrieves the schema version.
 
-        :return:
+        :returns:
             The current version of the schema of the graph. None for GLOBAL.
         """
         self.log.debug("getSchemaVersion()")
@@ -756,7 +756,7 @@ class TigerGraphBase(object):
         :param force:
             If `True`, forces the retrieval the schema details again, otherwise returns a cached copy of vertex type details (if they were already fetched
                 previously).
-        :return:
+        :returns:
             The details of the specified vertex type.
         """
         self.log.debug("getVertexType(" + nvl(vertexType) + ", " + nvl(force) + ")")
@@ -775,7 +775,7 @@ class TigerGraphBase(object):
             The name of the vertex type.
         :param where:
             Filter condition.
-        :return:
+        :returns:
             A dictionary of <vertex_type>: <vertex_count> pairs.
 
         Uses:
@@ -852,11 +852,13 @@ class TigerGraphBase(object):
                     ret[r["v_type"]] = r["attributes"]
         return ret
 
-    def isTaggable(self, vertexType: str):
+    def isTaggable(self, vertexType: str) -> bool:
         """Is the vertex type marked as taggable?
 
         :param vertexType:
             The name of the vertex type.
+        :returns:
+            `True` if the vertex type is taggable.
         """
         pass
 
@@ -865,7 +867,7 @@ class TigerGraphBase(object):
     def getIndices(self, force: bool = False) -> list:
         """Returns the list of all index names.
 
-        :return:
+        :returns:
         """
         self.log.debug("getIndices(" + nvl(force) + ")")
 
@@ -885,7 +887,7 @@ class TigerGraphBase(object):
 
         :param vertexType:
             The name of the vertex type.
-        :return:
+        :returns:
         """
         pass
 
@@ -894,7 +896,7 @@ class TigerGraphBase(object):
 
         :param indexName:
         :param force:
-        :return:
+        :returns:
         """
         self.log.debug("getIndex(" + nvl(indexName) + ", " + nvl(force) + ")")
 
@@ -913,7 +915,7 @@ class TigerGraphBase(object):
                 previously).
         """
         ret = []
-        for et in self.getSchema(force=force)["EdgeTypes"]:
+        for et in self.getSchema(force=force)[ETS]:
             ret.append(et["Name"])
         return ret
 
@@ -926,7 +928,7 @@ class TigerGraphBase(object):
             If `True`, forces the retrieval the schema details again, otherwise returns a cached copy of edge type details (if they were already fetched
                 previously).
         """
-        for et in self.getSchema(force=force)["EdgeTypes"]:
+        for et in self.getSchema(force=force)[ETS]:
             if et["Name"] == edgeType:
                 return et
         return {}
@@ -1139,7 +1141,7 @@ class TigerGraphBase(object):
 
     # User defined types =======================================================
 
-    def getUDTs(self, force: bool = True) -> list:
+    def getUDTs(self, force: bool = False) -> list:
         """
         Returns the list of User Defined Types (names only).
 
@@ -1155,7 +1157,7 @@ class TigerGraphBase(object):
             ret.append(udt["Name"])
         return ret
 
-    def getUDT(self, udtName: str, force: bool = True) -> dict:
+    def getUDT(self, udtName: str, force: bool = False) -> dict:
         """
         Returns the field details of a specific User Defined Type.
 
@@ -1175,22 +1177,30 @@ class TigerGraphBase(object):
 
     # Queries ==================================================================
 
-    def getInstalledQueries(self):
+    def getInstalledQueries(self) -> list:
         """
-        Returns a list of installed queries.
+        Returns a list of installed queries (names only).
         """
-        ret = self.getEndpoints(dynamic=True)
-        return ret
+        eps = self.getEndpoints(dynamic=True).keys()
+        return list(eps)
 
     # TODO What about created but _not_ installed queries?
 
-    def getQuery(self, queryName: str):
+    def getQuery(self, queryName: str, force: bool = False) -> dict:
         """
+        Returns the details of the specified query.
 
         :param queryName:
-        :return:
+            The name of the query.
+        :param force:
+            If `True`, forces the retrieval the query details again, otherwise returns a cached copy of query details (if they were already fetched previously).
+        :returns:
+            The details of the specified query.
         """
-        pass
+        for qu in self.getSchema(force=force)[QUS]:
+            if qu["Name"] == queryName:
+                return qu
+        return {}
 
     def getRunningQueries(self):
         """
@@ -1203,7 +1213,7 @@ class TigerGraphBase(object):
         """
 
         :param queryName:
-        :return:
+        :returns:
         """
         pass
 
@@ -1259,7 +1269,7 @@ class TigerGraphBase(object):
     def getSchemaChangeJobs(self) -> list:
         """
 
-        :return:
+        :returns:
         """
         ret = []
         return ret
@@ -1268,7 +1278,7 @@ class TigerGraphBase(object):
         """
 
         :param jobName:
-        :return:
+        :returns:
         """
         pass
 
@@ -1277,7 +1287,7 @@ class TigerGraphBase(object):
     def getUsers(self) -> list:
         """
 
-        :return:
+        :returns:
         """
         pass
 
@@ -1285,7 +1295,7 @@ class TigerGraphBase(object):
         """
 
         :param userName:
-        :return:
+        :returns:
         """
         pass
 
@@ -1294,7 +1304,7 @@ class TigerGraphBase(object):
     def getGroups(self) -> list:
         """
 
-        :return:
+        :returns:
         """
         pass
 
@@ -1302,7 +1312,7 @@ class TigerGraphBase(object):
         """
 
         :param groupName:
-        :return:
+        :returns:
         """
         pass
 
@@ -1311,7 +1321,7 @@ class TigerGraphBase(object):
     def getTags(self) -> list:
         """
 
-        :return:
+        :returns:
         """
         pass
 
@@ -1373,7 +1383,7 @@ class TigerGraphBase(object):
         """
 
         :param secret:
-        :return:
+        :returns:
 
         ⚠️ Consider security implications
         """
@@ -1382,7 +1392,7 @@ class TigerGraphBase(object):
     def getCurrentTokens(self) -> dict:
         """
 
-        :return:
+        :returns:
 
         ⚠️ Consider security implications
         """
@@ -1403,7 +1413,7 @@ class TigerGraphBase(object):
             See https://docs.tigergraph.com/admin/admin-guide/user-access-management/user-privileges-and-authentication#managing-credentials
         :param lifetime:
             Duration of token validity (in secs, default 30 days = 2,592,000 secs).
-        :return:
+        :returns:
             A tuple of (<new_token>, <expiration_timestamp_unixtime>, <expiration_timestamp_ISO8601>).
             Return value can be ignored.
 
@@ -1447,7 +1457,7 @@ class TigerGraphBase(object):
             The token requested earlier. If not specified, refreshes current connection's token.
         :param lifetime:
             Duration of token validity (in secs, default 30 days = 2,592,000 secs) from current system timestamp.
-        :return:
+        :returns:
             Returns a tuple of (<token>, <expiration_timestamp_unixtime>, <expiration_timestamp_ISO8601>).
             Return value can be ignored.
             Raises exception if specified token does not exists.
@@ -1502,7 +1512,7 @@ class TigerGraphBase(object):
             The token requested earlier. If not specified, delete current connection's token, so be careful.
         :param skipNA:
             Don't raise exception if specified token does not exist.
-        :return:
+        :returns:
             `True` if deletion was successful or token did not exist but `skipNA` was `True`; raises exception otherwise.
 
         This function works only if REST++ authentication is enabled. If not, an exception will be raised.
