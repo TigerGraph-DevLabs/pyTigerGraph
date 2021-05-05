@@ -371,7 +371,23 @@ class TigerGraphOps(TigerGraphBase):
             return ""
 
     def dropSecret(self, alias):
-        pass;
+        pass
+
+    def clearExpiredTokens(self, users : [str, list], secrets: [str | list]) -> dict:
+        """Clears expired tokens
+
+        TODO
+        Usage:
+            (1)  curl -X DELETE "localhost:8123/expiredtoken"
+            This request will remove all expired tokens of all users.
+            (2)  curl -X DELETE "localhost:8123/expiredtoken?user=u1&user=u2&secret=s1"
+            This request will remove all expired tokens of user u1, u2 and secret s1.
+
+        :param users:
+        :param secrets:
+        :return:
+        """
+        pass
 
     # Tags =====================================================================
 

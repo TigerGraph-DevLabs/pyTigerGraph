@@ -51,8 +51,10 @@ print("Start\n" + ("-" * 100))
 
 # conn = tgB(host="http://127.0.0.1", username="tigergraph", password="tigergraph1", restppPort="31900", gsPort="31240", graphname="MyGraph",
 #     secret="ljhrnahjgk5c8hoji67n1pnp4i65sp77", debug=True)
-conn = tgB(host="http://127.0.0.1", username="tigergraph", password="tigergraph", restppPort="31900", gsPort="31240", graphname="MyGraph",
-    debug=True)
+# conn = tgB(host="http://127.0.0.1", username="tigergraph", password="tigergraph1", restppPort="31900", gsPort="31240", graphname="MyGraph",
+#     secret="iu60uh6j8t1quo22ej3eet7jqu5tckr4", debug=True)
+conn = tgB(host="http://127.0.0.1", username="tigergraph", password="tigergraph1", restppPort="31900", gsPort="31240", graphname="hiwe",
+    secret="f1qh9ugi5j4clr74tl4pt6rp4calpr3l", debug=True)
 # conn = tg.TigerGraphBase(host="https://szbtg-test.i.tgcloud.io", graphname="test", useCert=True)
 
 # token = conn.getToken("7dcavgjrsouqinebukfek4cu15a1e3ac")
@@ -60,11 +62,12 @@ conn = tgB(host="http://127.0.0.1", username="tigergraph", password="tigergraph"
 # pr("getCurrentGraph()", conn.getCurrentGraph)
 
 # print(token)
-# conn.getToken("2g7scij43oqfdc5oespbdg3p9guei3l5", "geo_pogo")
+# token = conn.getToken("iu60uh6j8t1quo22ej3eet7jqu5tckr4")
+# print(token)
 # pr("getCurrentTokens()", conn.getCurrentTokens)
 # pr("getCurrentGraph()", conn.getCurrentGraph)
 
-# conn.getToken("dfl156tq588hqb5d6i3pdb55mgfbbjch", "abc")
+# conn.getToken("dfl156tq588hqb5d6i3pdb55mgfbbjch")
 
 
 # Graph related functions ======================================================
@@ -98,14 +101,14 @@ conn = tgB(host="http://127.0.0.1", username="tigergraph", password="tigergraph"
 # Schema related functions =====================================================
 
 # Get schema metadata
+pr("getSchema()", conn.getSchema)
+# pr("useGraph(g1)", conn.useGraph, "g1", "06b144e5i0ejlq566b53p07j2t02qsme")
 # pr("getSchema()", conn.getSchema)
-
-pr("useGraph(g1)", conn.useGraph, ("g1"))
+# pr("useGraph(global)", conn.useGraph, "global")
 # pr("getSchema()", conn.getSchema)
-pr("useGraph(global)", conn.useGraph, ("global"))
+# pr("useGraph(hiwe)", conn.useGraph, "hiwe", "f1qh9ugi5j4clr74tl4pt6rp4calpr3l")
 # pr("getSchema()", conn.getSchema)
-pr("useGraph(global)", conn.useGraph, ("hiwe"))
-# pr("getSchema()", conn.getSchema)
+# pr("useGraph(global)", conn.useGraph, "MyGraph")
 
 # Get schema version
 # pr("getSchemaVersion()", conn.getSchemaVersion)
@@ -153,9 +156,9 @@ pr("useGraph(global)", conn.useGraph, ("hiwe"))
 # Index related functions ======================================================
 
 # pr("getIndices()", conn.getIndices)
-ixs = conn.getIndices()
-if ixs:
-    pr("getIndex()", conn.getIndex, (ixs[0]))
+# ixs = conn.getIndices()
+# if ixs:
+#     pr("getIndex()", conn.getIndex, (ixs[0]))
 
 # Edge related functions =======================================================
 
@@ -235,12 +238,12 @@ if ixs:
 # UDT related functions ========================================================
 
 # Get Used Defined Types
-pr("getUDTs", conn.getUDTs)
+# pr("getUDTs", conn.getUDTs)
 
 # Get the description of a specific UDT
-udts = conn.getUDTs()
-if udts:
-    pr("getUDT", conn.getUDT, (udts[0]))
+# udts = conn.getUDTs()
+# if udts:
+#    pr("getUDT", conn.getUDT, (udts[0]))
 
 # Query related functions =======================================================
 
@@ -258,6 +261,10 @@ if udts:
 # }"
 # pr("runInterpretedQuery", conn.runInterpretedQuery(gsql, "a=5", timeout=50000, sizeLimit=50000))
 
+pr("getQueries()", conn.getQueries)
+pr("getQueries()", conn.getQueries, True)
+
+pr("getQuery()", conn.getQuery, conn.getQueries()[0])
 # Token related functions =======================================================
 
 # print(conn.apiToken)

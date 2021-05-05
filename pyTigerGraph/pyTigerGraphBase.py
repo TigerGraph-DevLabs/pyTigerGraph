@@ -115,7 +115,7 @@ class TigerGraphBase(object):
         # Set up REST++ API authentication
         if secret:  # If `secret` has been provided, use it to get apiToken (preferred approach)
             self.graphs[self.graphName][SEC] = secret
-            self.graphs[self.graphName][TOK] = apiToken = self.getToken(secret)
+            self.graphs[self.graphName][TOK] = self.getToken(secret)[0]
         elif apiToken:  # If `apiToken` has been provided, use it
             self.graphs[self.graphName][SEC] = ""
             self.graphs[self.graphName][TOK] = apiToken
@@ -127,10 +127,10 @@ class TigerGraphBase(object):
         self.log.debug(
             "Connecting (" + nvl(self.url.netloc) + ", " + nvl(username) + ", " + nvl(certPath) + ", " + nvl(gsqlVersion) + ", " + nvl(restppPort) +
             ", " + nvl(gsPort) + ", " + nvl(self.url.scheme) + ", " + nvl(graphname) + ", " + nvl(apiToken) + ")")
-        self.conn = pyTD.Client(self.url.netloc, username, password, False, certPath, gsqlVersion, "", restppPort, gsPort, self.url.scheme, graphname, apiToken)
+        self.conn = pyTD.Client(self.url.netloc, username, password, False, certPath, gsqlVersion, "", restppPort, gsPort, self.url.scheme, self.graphName,
+            self.graphs[self.graphName][TOK])
 
         # Collections for global object types
-        self.udts = []  # The details of all UDTs (global types)
         self.dataSources = []  # The details of data sources (global objects)
         self.users = []  # The details of users (visibility depends on role)
         self.groups = []  # The details of proxy groups (visibility depends on role)
@@ -144,7 +144,16 @@ class TigerGraphBase(object):
         """
         Generic GET method.
 
-        TODO: parameters
+        :param path:
+            The path part of the URL of the endpoint.
+        :param params:
+            The parameters of the endpoint request.
+        :param headers:
+            Additional HTTP headers.
+        :param resKey:
+            The key of the portion of the response that should be returned as result (skip unwanted other [meta]data).
+        :param skipCheck:
+            Skip checking for errors, let me handle them.
         """
         self.log.debug("get(" + nvl(path) + ", " + nvl(params) + ", " + nvl(headers) + ", " + nvl(resKey) + ", " + nvl(skipCheck) + ")")
 
@@ -160,7 +169,18 @@ class TigerGraphBase(object):
         """
         Generic POST method.
 
-        TODO: parameters
+        :param path:
+            The path part of the URL of the endpoint.
+        :param params:
+            The parameters of the endpoint request.
+        :param data:
+            The payload of the POST request.
+        :param headers:
+            Additional HTTP headers.
+        :param resKey:
+            The key of the portion of the response that should be returned as result (skip unwanted other [meta]data).
+        :param skipCheck:
+            Skip checking for errors, let me handle them.
         """
         self.log.debug("post(" + nvl(path) + ", " + nvl(params) + ", " + nvl(headers) + ", " + nvl(resKey) + ", " + nvl(skipCheck) + ")")
 
@@ -180,7 +200,8 @@ class TigerGraphBase(object):
         """
         Generic DELETE method.
 
-        TODO: parameters
+        :param path:
+            The path part of the URL of the endpoint.
         """
         self.log.debug("post(" + nvl(path) + ")")
 
@@ -270,7 +291,7 @@ class TigerGraphBase(object):
                     ixn = tmp1[0]
                     vtn = tmp1[1][0:tmp2.find("(")]
                     att = tmp2[tmp2.find("(") + 1:tmp2.find(")")]
-                    stmt = ""  # TODO
+                    stmt = "ALTER VERTEX " + vtn + " ADD INDEX " + ixn + " ON (" + att + ")"  # Must be encapsulated into a [global] schema change job
                     ix = {"Name": ixn, "Statement": stmt, "Vertex": vtn, "Attribute": att}
                     ixs.append(ix)
                     i = i + 1
@@ -334,9 +355,24 @@ class TigerGraphBase(object):
                 while line.lstrip().startswith("- "):
                     qName = line[line.find("- ") + 2:line.find("(")]
                     dep = line.endswith('(deprecated)')
+                    inst = "installed" in line
+                    api = "v2"
+                    if inst:
+                        mat = re.search(" (v.?)\)", line)
+                        if mat:
+                            api = mat.group(1)
                     txt = self.execute("SHOW QUERY " + qName)
                     txt = re.sub(qpatt, "CREATE", "\n".join(txt))
-                    qus.append({"Name": qName, "Statement": txt, "Deprecated": dep})
+                    syn = "v1"
+                    mat = re.search("SYNTAX (v.?)", txt, re.IGNORECASE)
+                    if mat:
+                        syn = mat.group(1)
+                    det = {"Name": qName, "Statement": txt, "Deprecated": dep, "Installed": inst, "API": api, "Syntax": syn}
+                    mat = re.search("RETURNS ?\((\w+)\)", txt, re.IGNORECASE)
+                    if mat:
+                        det["Returns"] = mat.group(1).upper()
+                    qus.append(det)
+                    # TODO parameter defaults
                     i = i + 1
                     line = res[i]
 
@@ -371,6 +407,7 @@ class TigerGraphBase(object):
             i += 1
 
         if self.graphName == GLOBAL:
+            self._getUDTs(udts)
             ret = {VTS: vts, IXS: ixs, ETS: ets, DSS: dss, SCJS: scjs, UDTS: udts}
         else:
             ret = {VTS: vts, IXS: ixs, ETS: ets, QUS: qus, DSS: dss, LJS: ljs, SCJS: scjs, TAGS: tags}
@@ -400,7 +437,7 @@ class TigerGraphBase(object):
         ret = {}
         return ret
 
-    def _getUDTs(self):
+    def _getUDTs(self, udts):
         """
         Collects User Defined Types (UDTs) metadata.
 
@@ -411,20 +448,16 @@ class TigerGraphBase(object):
         """
         self.log.debug("_getUDTs()")
 
-        if GLOBAL not in self.graphs:
-            self._getSchema(True)
-        self.udts = self.graphs[GLOBAL][SCH][UDTS]
-
         res = self.get("/gsqlserver/gsql/udtlist", {"graph=": self.graphName})
         for u1 in res:
             found = False
-            for u2 in self.udts:
+            for u2 in udts:
                 if u2["Name"] == u1["name"]:
                     found = True
                     u2["Fields"] = u1["fields"]
             if not found:  # This should not happen (all UDTs should already be enumerated by LS earlier)
-                stmt = ""  # TODO: Generate statement
-                self.udts.append({"Name": u1["name"], "Fields": u1["fields"], "Statement": stmt})
+                stmt = ""  # TODO: Generate statement (would it be meaningful?)
+                udts.append({"Name": u1["name"], "Fields": u1["fields"], "Statement": stmt})
 
     def _getUsers(self):
         """
@@ -651,16 +684,18 @@ class TigerGraphBase(object):
         # Setup REST++ API authentication for newly selected graph
         if secret:  # If `secret` has been provided, use it to get apiToken (preferred approach)
             self.graphs[self.graphName][SEC] = secret
-            self.graphs[self.graphName][TOK] = self.getToken(secret)
+            self.graphs[self.graphName][TOK] = self.getToken(secret)[0]
         elif apiToken:  # If `apiToken` has been provided, use it
-            self.graphs[self.graphName][SEC] = ""
+            # self.graphs[self.graphName][SEC] = ""  # Leave secret unchanged
             self.graphs[self.graphName][TOK] = apiToken
         else:  # Neither `secret`, nor `apiToken` were provided, check if token was generated previously
-            if TOK in self.graphs[self.graphName]:
+            if self.graphs[self.graphName][TOK]:
                 pass  # All ok, use existing token
             else:
-                self.graphs[self.graphName][SEC] = ""
-                self.graphs[self.graphName][TOK] = ""
+                if self.graphs[self.graphName][SEC]:  # If secret was provided earlier, use it to get a new token
+                    self.graphs[self.graphName][TOK] = self.getToken(secret)[0]
+                else:
+                    pass  # Neither `secret`, nor `apiToken` were provided now or earlier, assume REST++ API authentication is not enabled
 
         self.conn.Rest.setToken(self.graphs[self.graphName][TOK])
 
@@ -1150,10 +1185,13 @@ class TigerGraphBase(object):
         :returns:
             List of UDTs names.
         """
-        if not self.udts or force:
-            self._getUDTs()
+        self.log.debug("getUDTs(" + nvl(force) + ")")
+
+        if not self.graphs[GLOBAL] or force:
+            self._getSchema(True)
+
         ret = []
-        for udt in self.udts:
+        for udt in self.graphs[GLOBAL][SCH][UDTS]:
             ret.append(udt["Name"])
         return ret
 
@@ -1168,23 +1206,30 @@ class TigerGraphBase(object):
         :returns:
             Details of the specified UDT.
         """
-        if not self.udts or force:
-            self._getUDTs()
-        for udt in self.udts:
+        self.log.debug("getUDTs(" + nvl(udtName) + ", " + nvl(force) + ")")
+
+        if not self.graphs[GLOBAL] or force:
+            self._getSchema(True)
+
+        for udt in self.graphs[GLOBAL][SCH][UDTS]:
             if udt["Name"] == udtName:
                 return udt
         raise TigerGraphException("Invalid UDT name: " + udtName)
 
     # Queries ==================================================================
 
-    def getInstalledQueries(self) -> list:
+    def getQueries(self, installed: bool = False, force: bool = False) -> list:
         """
-        Returns a list of installed queries (names only).
+        Returns a list of queries (names only).
         """
-        eps = self.getEndpoints(dynamic=True).keys()
-        return list(eps)
+        self.log.debug("getInstalledQueries(" + nvl(force) + ")")
 
-    # TODO What about created but _not_ installed queries?
+        ret = []
+        for qu in self.getSchema(force=force)[QUS]:
+            if (installed and qu["Installed"]) or not installed:
+                ret.append(qu["Name"])
+
+        return ret
 
     def getQuery(self, queryName: str, force: bool = False) -> dict:
         """
@@ -1197,6 +1242,8 @@ class TigerGraphBase(object):
         :returns:
             The details of the specified query.
         """
+        self.log.debug("getQuery(" + nvl(queryName) + ", " + nvl(force) + ")")
+
         for qu in self.getSchema(force=force)[QUS]:
             if qu["Name"] == queryName:
                 return qu
@@ -1207,14 +1254,19 @@ class TigerGraphBase(object):
         TODO: GET /showprocesslist/{graph_name}
               https://docs.tigergraph.com/dev/restpp-api/built-in-endpoints#get-running-queries-showprocesslist-graph_name
         """
+        self.log.debug("getRunningQueries()")
+
         pass
 
     def getQueryStatus(self, queryName: str):
         """
 
+        TODO: implement
         :param queryName:
         :returns:
         """
+        self.log.debug("getQueryStatus(" + nvl(queryName) + ")")
+
         pass
 
     # Data sources =============================================================
@@ -1366,6 +1418,7 @@ class TigerGraphBase(object):
             for ep in res:
                 if re.search(r"^GET /query/" + self.graphName, ep):
                     eps[ep] = res[ep]
+            # TODO filter out queries from not this graph
             ret.update(eps)
         if sta:
             ret.update(self.get(url, {"static": True}, resKey=""))
@@ -1428,7 +1481,7 @@ class TigerGraphBase(object):
         self.log.debug("getToken(" + nvl(secret[:4] + "****" + secret[-4:]) + ", " + nvl(lifetime) + ")")
 
         if not secret:
-            secret = self.graphs[self.graphName]["secret"]
+            secret = self.graphs[self.graphName][SEC]
             if not secret:  # `secret` was not previously provided
                 raise TigerGraphException("Secret is not available")
             self.log.debug("  getToken(): use current secret")
